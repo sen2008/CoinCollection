@@ -1,0 +1,19 @@
+# Windows "downloaded from the internet" metadata, created when files are
+# copied out of a browser or a WSL share. Nothing here needs them.
+*:Zone.Identifier
+*.Identifier
+
+# macOS
+.DS_Store
+
+__pycache__/
+*.pyc
+
+# The encrypted site is rebuilt by .github/workflows/pages.yml on every push and
+# uploaded straight to GitHub Pages, so the ciphertext never needs committing —
+# that keeps ~36 MB of rewritten blobs out of the history.
+docs/
+
+# Local build state: the salt, and a check value that catches a mistyped
+# passphrase on a rebuild. Not a secret, but not shared either.
+vault.json
