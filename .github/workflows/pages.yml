@@ -1,19 +1,20 @@
 name: Publish archive
 
-# Encrypts the catalogue and publishes it to GitHub Pages. The passphrase comes
-# from the ARCHIVE_PASSPHRASE repository secret and never enters the repository:
-# the site is built here and uploaded straight to Pages, so no plaintext — and no
-# ciphertext either — is ever committed.
+# Deploys the encrypted site in docs/ to GitHub Pages.
+#
+# The build itself happens on Lucas's machine, not here: this repository is
+# public and holds no part of the collection, so there is nothing for CI to
+# encrypt. Run build_site.py locally, commit docs/, and this publishes it.
+#
+# Nothing secret is needed. The passphrase never reaches GitHub.
 
 on:
   push:
     branches: [main]
+    # Only a change to the encrypted site republishes. Editing this workflow
+    # does not redeploy content; use workflow_dispatch for that.
     paths:
-      - 'coin-archive/coin-archive/catalog.html'
-      - 'coin-archive/coin-archive/photos/**'
-      - 'gate.html'
-      - 'build_site.py'
-      - '.github/workflows/pages.yml'
+      - 'docs/**'
   workflow_dispatch:
 
 permissions:
@@ -27,42 +28,31 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - run: pip install cryptography
-
-      - name: Check the passphrase is set
-        env:
-          ARCHIVE_PASSPHRASE: ${{ secrets.ARCHIVE_PASSPHRASE }}
-        run: |
-          if [ -z "$ARCHIVE_PASSPHRASE" ]; then
-            echo "::error::ARCHIVE_PASSPHRASE is not set. Add it under" \
-                 "Settings → Secrets and variables → Actions before publishing."
-            exit 1
-          fi
-
-      - name: Encrypt the archive
-        env:
-          ARCHIVE_PASSPHRASE: ${{ secrets.ARCHIVE_PASSPHRASE }}
-        run: python3 build_site.py
-
+      # This repository is public, so a readable docs/ would put the collection
+      # on the open internet. Refuse rather than publish it.
       - name: Refuse to publish anything readable
         run: |
-          # A last check that the build produced ciphertext and not the catalogue
-          # itself. index.html is the only file that is meant to be readable.
-          if grep -qa 'THUMBS' docs/app.bin; then
+          if [ ! -s docs/app.bin ] || [ ! -s docs/index.html ]; then
+            echo "::error::docs/ is missing or incomplete. Run build_site.py and commit docs/."
+            exit 1
+          fi
+          if grep -qa 'THUMBS\|<!DOCTYPE html>' docs/app.bin; then
             echo "::error::docs/app.bin is not encrypted. Refusing to publish."
             exit 1
           fi
-          if [ ! -s docs/app.bin ] || [ ! -s docs/index.html ]; then
-            echo "::error::The build did not produce a complete site."
+          # index.html is the unlock page and is meant to be readable. Nothing else is.
+          if find docs -type f ! -name 'index.html' ! -name '.nojekyll' \
+               ! -name '*.bin' -print -quit | grep -q .; then
+            echo "::error::docs/ contains files that are neither the unlock page nor ciphertext:"
+            find docs -type f ! -name 'index.html' ! -name '.nojekyll' ! -name '*.bin'
             exit 1
           fi
 
@@ -72,12 +62,5 @@ jobs:
         with:
           path: docs
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
       - id: deployment
         uses: actions/deploy-pages@v4

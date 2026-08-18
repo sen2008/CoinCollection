@@ -1,5 +1,36 @@
-# Windows "downloaded from the internet" metadata, created when files are
-# copied out of a browser or a WSL share. Nothing here needs them.
+# ---------------------------------------------------------------------------
+# The collection itself never goes in this repository.
+#
+# This repository is public so that GitHub Pages can serve the site for free,
+# which means anything committed here is readable by anyone. The encryption in
+# docs/ protects the published site; it does nothing for files sitting in the
+# repository. So the archive stays on Lucas's machine and only the encrypted
+# output is committed.
+#
+# Keep your own backup of everything below. GitHub is not holding a copy.
+# ---------------------------------------------------------------------------
+
+# The source of truth and everything derived from it
+coin-archive/coin-archive/inventory.csv
+coin-archive/coin-archive/catalog.html
+coin-archive/coin-archive/photos/
+coin-archive/coin-archive/sheets/
+
+# The identifications and bag assignments — these carry the same data as the CSV
+coin-archive/coin-archive/seed_pass*.py
+coin-archive/coin-archive/assign_bags*.py
+coin-archive/coin-archive/assign_bag16_finds.py
+coin-archive/coin-archive/mark_duplicates.py
+
+# Stray duplicates that used to sit at the repository root
+/catalog.html
+/inventory.csv
+
+# Local build state: the salt, and a check value that catches a mistyped
+# passphrase on a rebuild. Not a secret, but not worth publishing either.
+vault.json
+
+# Windows "downloaded from the internet" metadata
 *:Zone.Identifier
 *.Identifier
 
@@ -9,11 +40,5 @@
 __pycache__/
 *.pyc
 
-# The encrypted site is rebuilt by .github/workflows/pages.yml on every push and
-# uploaded straight to GitHub Pages, so the ciphertext never needs committing —
-# that keeps ~36 MB of rewritten blobs out of the history.
-docs/
-
-# Local build state: the salt, and a check value that catches a mistyped
-# passphrase on a rebuild. Not a secret, but not shared either.
-vault.json
+# The collection README lives with the collection, not in the public repo
+coin-archive/coin-archive/README.md
