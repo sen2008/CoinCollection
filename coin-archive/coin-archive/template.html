@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coin &amp; Currency Archive</title>
+<style>
+:root{
+  --felt:#2A362F;
+  --felt-deep:#1E2823;
+  --felt-rail:#38463D;
+  --card:#F4F1E6;
+  --card-edge:#DED8C6;
+  --ink:#17140F;
+  --ink-soft:#5C564A;
+  --red:#A8322A;
+  --brass:#C08A2E;
+  --silver:#A8B0B2;
+  --paper:#8A9A6B;
+  --copper:#96603C;
+  --f-data:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --f-body:Georgia,"Iowan Old Style","Times New Roman",serif;
+  --f-ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--felt);
+  background-image:radial-gradient(circle at 20% 0%,rgba(255,255,255,.04),transparent 60%);
+  color:var(--card);
+  font-family:var(--f-ui);
+  -webkit-font-smoothing:antialiased;
+}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+
+/* ---------- masthead ---------- */
+header{
+  position:sticky;top:0;z-index:40;
+  background:var(--felt-deep);
+  border-bottom:1px solid #000;
+  padding:14px 20px 12px;
+}
+.masthead{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap}
+h1{
+  margin:0;font-family:var(--f-data);font-size:15px;font-weight:700;
+  letter-spacing:.22em;text-transform:uppercase;
+}
+.tally{font-family:var(--f-data);font-size:12px;color:var(--silver);letter-spacing:.06em}
+.tally b{color:var(--card);font-weight:700}
+.bar{
+  flex:1 1 160px;height:3px;min-width:120px;
+  background:#000;border-radius:2px;overflow:hidden;align-self:center;
+}
+.bar i{display:block;height:100%;background:var(--brass);transition:width .3s}
+
+.controls{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center}
+.search{
+  flex:1 1 220px;min-width:0;
+  background:var(--felt);border:1px solid var(--felt-rail);border-radius:3px;
+  padding:7px 10px;font-family:var(--f-data);font-size:13px;color:var(--card);
+}
+.search::placeholder{color:#7C8880}
+select.filter{
+  background:var(--felt);border:1px solid var(--felt-rail);border-radius:3px;
+  padding:7px 8px;font-family:var(--f-data);font-size:12px;
+}
+.btn{
+  background:var(--felt-rail);border:1px solid #4C5A50;border-radius:3px;
+  padding:7px 12px;font-family:var(--f-data);font-size:12px;letter-spacing:.06em;
+  text-transform:uppercase;cursor:pointer;
+}
+.btn:hover{background:#48564C}
+.btn-key{background:var(--brass);border-color:var(--brass);color:#231A08;font-weight:700}
+.btn-key:hover{background:#D29A38}
+.chip{
+  background:transparent;border:1px solid var(--felt-rail);border-radius:99px;
+  padding:5px 11px;font-family:var(--f-data);font-size:11px;letter-spacing:.06em;
+  text-transform:uppercase;cursor:pointer;color:var(--silver);
+}
+.chip[aria-pressed="true"]{background:var(--card);color:var(--ink);border-color:var(--card);font-weight:700}
+
+/* ---------- grid of flips ---------- */
+main{padding:22px 20px 80px;max-width:1500px;margin:0 auto}
+.grid{
+  display:grid;gap:18px;
+  grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+}
+.flip{
+  position:relative;background:var(--card);color:var(--ink);
+  border:1px solid var(--card-edge);border-radius:2px;
+  padding:26px 12px 12px;cursor:pointer;text-align:left;width:100%;
+  box-shadow:0 2px 0 rgba(0,0,0,.35),0 8px 18px rgba(0,0,0,.28);
+  transition:transform .12s ease,box-shadow .12s ease;
+}
+.flip:hover,.flip:focus-visible{
+  transform:translateY(-3px);
+  box-shadow:0 4px 0 rgba(0,0,0,.35),0 14px 26px rgba(0,0,0,.34);
+}
+/* the four staples */
+.flip>span,.frame>span{display:block}
+.flip::before,.flip::after,.frame::before,.frame::after{
+  content:"";position:absolute;background:#8D9296;border-radius:1px;
+}
+.flip::before{width:1.5px;height:16px;left:5px;top:50%;margin-top:-8px}
+.flip::after{width:1.5px;height:16px;right:5px;top:50%;margin-top:-8px}
+.frame{position:relative}
+.frame::before{width:16px;height:1.5px;left:50%;margin-left:-8px;top:-13px}
+.frame::after{width:16px;height:1.5px;left:50%;margin-left:-8px;bottom:-13px}
+.spine{position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--silver)}
+.tag{
+  position:absolute;top:7px;left:12px;
+  font-family:var(--f-data);font-size:10px;font-weight:700;letter-spacing:.12em;
+  color:var(--ink-soft);
+}
+.dot{position:absolute;top:9px;right:10px;width:7px;height:7px;border-radius:50%;background:#C9C2AE}
+.dot.done{background:#4C7A4E}
+.dot.check{background:var(--red)}
+.flip.dup{opacity:.55}
+.mark.d{background:#6E7F92;color:#fff}
+.win{display:block;background:#E7E2D2;border-radius:1px;overflow:hidden;aspect-ratio:3/4;
+  box-shadow:inset 0 1px 4px rgba(0,0,0,.22)}
+.win img{width:100%;height:100%;object-fit:cover;display:block}
+.cap{margin-top:22px;min-height:46px}
+.cap .line1{font-family:var(--f-body);font-size:14px;line-height:1.25}
+.cap .line2{font-family:var(--f-data);font-size:10.5px;color:var(--ink-soft);
+  letter-spacing:.05em;margin-top:3px;text-transform:uppercase}
+.blank{height:1px;background:#D8D2C0;margin:9px 0}
+.blank+.blank{margin-top:-4px}
+.marks{position:absolute;top:6px;right:24px;display:flex;gap:4px}
+.mark{font-family:var(--f-data);font-size:9px;font-weight:700;letter-spacing:.08em;
+  padding:1px 4px;border-radius:2px}
+.mark.k{background:var(--brass);color:#231A08}
+.mark.a{background:var(--red);color:#fff}
+.ghead{
+  grid-column:1/-1;display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
+  margin:20px 0 2px;padding-bottom:9px;
+  border-bottom:1px solid var(--felt-rail);
+}
+.grid>.ghead:first-child{margin-top:0}
+.ghead h2{
+  margin:0;font-family:var(--f-data);font-size:12.5px;font-weight:700;
+  letter-spacing:.2em;text-transform:uppercase;color:var(--card);
+}
+.ghead .gm{font-family:var(--f-data);font-size:11px;color:var(--silver);letter-spacing:.06em}
+.ghead .gr{margin-left:auto;color:var(--brass)}
+.basis{font-family:var(--f-data);font-size:9.5px;letter-spacing:.1em;
+  text-transform:uppercase;padding:2px 7px;border-radius:99px}
+.basis.b-owner{background:var(--brass);color:#231A08;font-weight:700}
+.basis.b-label{background:var(--card);color:var(--ink);font-weight:700}
+.basis.b-sequence{border:1px solid var(--felt-rail);color:var(--silver)}
+.basis.b-unplaced{border:1px dashed #6E7F92;color:#93A3B4}
+.empty{padding:60px 10px;text-align:center;font-family:var(--f-body);
+  font-size:16px;color:var(--silver)}
+
+/* ---------- record drawer ---------- */
+.scrim{position:fixed;inset:0;background:rgba(10,14,12,.6);z-index:50;display:none}
+.scrim.open{display:block}
+.drawer{
+  position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);z-index:60;
+  background:var(--card);color:var(--ink);
+  transform:translateX(100%);transition:transform .22s ease;
+  display:flex;flex-direction:column;
+}
+.drawer.open{transform:none}
+.dhead{
+  display:flex;align-items:center;gap:12px;padding:14px 18px;
+  border-bottom:1px solid var(--card-edge);background:#EDE9DA;
+}
+.dhead .id{font-family:var(--f-data);font-size:15px;font-weight:700;letter-spacing:.14em}
+.dhead .nav{margin-left:auto;display:flex;gap:6px}
+.ibtn{background:#DED8C6;border:1px solid #CCC5B0;border-radius:3px;
+  padding:5px 10px;font-family:var(--f-data);font-size:12px;cursor:pointer;color:var(--ink)}
+.ibtn:hover{background:#D3CCB8}
+.dbody{overflow-y:auto;padding:18px;flex:1}
+.plate{width:100%;border-radius:2px;background:#E7E2D2;display:block;margin-bottom:18px;
+  box-shadow:inset 0 1px 5px rgba(0,0,0,.2)}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.f{display:flex;flex-direction:column;gap:4px}
+.f.wide{grid-column:1/-1}
+.f label{font-family:var(--f-data);font-size:9.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--ink-soft)}
+.f input,.f select,.f textarea{
+  background:#FCFAF3;border:1px solid #D5CEBB;border-radius:2px;padding:7px 8px;
+  font-family:var(--f-body);font-size:14px;color:var(--ink);width:100%;
+}
+.f textarea{min-height:88px;resize:vertical;line-height:1.45}
+.hint{grid-column:1/-1;font-family:var(--f-body);font-size:12.5px;color:var(--ink-soft);
+  border-left:2px solid var(--red);padding-left:10px;line-height:1.5}
+
+@media (max-width:640px){
+  main{padding:16px 12px 70px}
+  .grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+  .fields{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){
+  *{transition:none!important}
+  .flip:hover{transform:none}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="masthead">
+    <h1>Coin &amp; Currency Archive</h1>
+    <span class="tally"><b id="tShown">0</b> shown &middot; <b id="tDone">0</b>/<b id="tAll">0</b> identified</span>
+    <span class="bar"><i id="tBar" style="width:0"></i></span>
+    <span class="tally" id="tMetal"></span>
+  </div>
+  <div class="controls">
+    <input id="q" class="search" type="search" placeholder="Search year, denomination, note, serial, ID…" autocomplete="off">
+    <select id="fCat" class="filter"><option value="">All categories</option></select>
+    <select id="fBag" class="filter"><option value="">All bags</option></select>
+    <select id="sort" class="filter"></select>
+    <button class="chip" id="cNeed" aria-pressed="false">Needs ID</button>
+    <button class="chip" id="cKey" aria-pressed="false">Key date</button>
+    <button class="chip" id="cAuth" aria-pressed="false">Authenticate</button>
+    <button class="btn" id="bImport">Load CSV</button>
+    <button class="btn btn-key" id="bExport">Save CSV</button>
+    <input id="file" type="file" accept=".csv" hidden>
+  </div>
+</header>
+
+<main><div class="grid" id="grid"></div><div class="empty" id="empty" hidden>Nothing matches those filters.</div></main>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-label="Record">
+  <div class="dhead">
+    <span class="id" id="dId">—</span>
+    <span class="nav">
+      <button class="ibtn" id="bPrev" title="Previous (K or ←)">&larr;</button>
+      <button class="ibtn" id="bNext" title="Next (J or →)">&rarr;</button>
+      <button class="ibtn" id="bClose" title="Close (Esc)">Close</button>
+    </span>
+  </div>
+  <div class="dbody" id="dBody"></div>
+</aside>
+
+<script>
+const DATA = /*__ITEMS__*/[];
+const THUMBS = /*__THUMBS__*/{};
+const COLUMNS = /*__COLUMNS__*/[];
+
+const CATS = ["Bulk Silver","Dollars","Half Dollars","Quarters","Dimes",
+  "Small Denominations","World Coins","Paper Currency","Bullion & Gold","Tokens & Novelty"];
+const SPINE = {
+  "Bulk Silver":"#A8B0B2","Dollars":"#8FA0A3","Half Dollars":"#9AA6A0",
+  "Quarters":"#8C9A94","Dimes":"#849089","Small Denominations":"#96603C",
+  "World Coins":"#6E7F92","Paper Currency":"#8A9A6B","Bullion & Gold":"#C08A2E",
+  "Tokens & Novelty":"#7A7266"
+};
+const SELECTS = {
+  status:["needs-id","identified","verified"],
+  category:CATS,
+  storage:["flip","bag","envelope","sleeve","album","slab","loose","tube","capsule"],
+  bag_basis:["","owner","label","sequence","unplaced"],
+  key_date:["","Y"],
+  authenticate:["","Y"]
+};
+const LABELS = {
+  id:"ID", status:"Status", category:"Category", qty:"Qty", country:"Country",
+  denomination:"Denomination", year:"Year", mint_mark:"Mint mark", variety:"Variety",
+  composition:"Composition", weight_g:"Weight (g)", asw_ozt:"Silver (ozt)",
+  agw_ozt:"Gold (ozt)", grade_noted:"Grade, as written", price_noted:"Price, as written",
+  acquired:"Acquired", bag:"Bag", storage:"Stored in", key_date:"Key date",
+  authenticate:"Authenticate", notes:"Notes", photo:"Photo", orig_photo:"Original file",
+  duplicate_of:"Duplicate of", bag_basis:"Bag evidence"
+};
+
+let items = DATA.slice();
+let view = [];
+let cur = -1;
+const F = {need:false, key:false, auth:false};
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* ---------- caption ---------- */
+function line1(it){
+  return [it.year, it.country==="USA"?"":it.country, it.variety, it.denomination]
+    .filter(Boolean).join(" ").trim();
+}
+function line2(it){
+  return [it.mint_mark && it.mint_mark+" mint", it.composition, it.grade_noted]
+    .filter(Boolean).join(" · ");
+}
+
+/* ---------- sorting ---------- */
+const bagNum = it => it.bag ? (parseInt(it.bag,10) || 9998) : 9999;
+const yearNum = it => parseInt(it.year,10) || 0;
+
+const SORTS = {
+  id: {
+    label: "Catalogue order",
+    cmp: (a,b) => a.id.localeCompare(b.id),
+    group: null
+  },
+  bag: {
+    label: "Bag",
+    cmp: (a,b) => bagNum(a)-bagNum(b) || a.id.localeCompare(b.id),
+    group: it => it.bag ? "Bag "+it.bag : "Not in a bag"
+  },
+  category: {
+    label: "Category",
+    cmp: (a,b) => (CATS.indexOf(a.category)+1||99)-(CATS.indexOf(b.category)+1||99)
+               || a.id.localeCompare(b.id),
+    group: it => it.category || "Uncategorised"
+  },
+  storage: {
+    label: "Stored in",
+    cmp: (a,b) => (a.storage||"~").localeCompare(b.storage||"~") || a.id.localeCompare(b.id),
+    group: it => it.storage ? it.storage[0].toUpperCase()+it.storage.slice(1) : "Unrecorded"
+  },
+  year: {
+    label: "Year, oldest first",
+    cmp: (a,b) => (yearNum(a)||9999)-(yearNum(b)||9999) || a.id.localeCompare(b.id),
+    group: null
+  }
+};
+
+/* Silver / gold / bulk roll-up for any set of records. */
+function metals(set){
+  const real = set.filter(i=>!i.duplicate_of);
+  const n = v => parseFloat(v)||0;
+  return {
+    ag:   real.reduce((s,i)=>s+n(i.asw_ozt)*n(i.qty),0),
+    au:   real.reduce((s,i)=>s+n(i.agw_ozt)*n(i.qty),0),
+    bulk: real.reduce((s,i)=>s+(i.asw_ozt?0:n(i.weight_g)),0),
+    count: real.length
+  };
+}
+function metalText(m){
+  const parts = [];
+  if(m.ag>0.005)   parts.push(m.ag.toFixed(2)+" ozt Ag");
+  if(m.au>0.0005)  parts.push(m.au.toFixed(3)+" ozt Au");
+  if(m.bulk>0)     parts.push(Math.round(m.bulk)+" g unweighed bulk");
+  return parts.join(" · ");
+}
+
+/* ---------- grid ---------- */
+function matches(it){
+  if(F.need && it.status!=="needs-id") return false;
+  if(F.key && it.key_date!=="Y") return false;
+  if(F.auth && it.authenticate!=="Y") return false;
+  const c = $("#fCat").value;
+  if(c && it.category!==c) return false;
+  const b = $("#fBag").value;
+  if(b === "__none") { if(it.bag) return false; }
+  else if(b && it.bag !== b) return false;
+  const q = $("#q").value.trim().toLowerCase();
+  if(!q) return true;
+  return COLUMNS.some(k => String(it[k]||"").toLowerCase().includes(q));
+}
+
+function tile(it){
+  const has = line1(it) || line2(it);
+  const marks = (it.key_date==="Y"?'<span class="mark k">KEY</span>':'')
+              + (it.authenticate==="Y"?'<span class="mark a">AUTH</span>':'')
+              + (it.duplicate_of?'<span class="mark d">DUP</span>':'');
+  const dot = it.status==="needs-id" ? "" : (it.authenticate==="Y"?"check":"done");
+  const cap = has
+    ? `<div class="line1">${esc(line1(it))}</div><div class="line2">${esc(line2(it))}</div>`
+    : `<div class="blank"></div><div class="blank"></div><div class="blank"></div>`;
+  return `<button class="flip${it.duplicate_of?" dup":""}" data-id="${it.id}">
+    <span class="spine" style="background:${SPINE[it.category]||"#C0BAA8"}"></span>
+    <span class="tag">${it.id}</span>
+    <span class="marks">${marks}</span>
+    <span class="dot ${dot}"></span>
+    <span class="frame"><span class="win"><img loading="lazy" src="${THUMBS[it.id]||""}" alt=""></span></span>
+    <span class="cap">${cap}</span>
+  </button>`;
+}
+
+function render(){
+  const sort = SORTS[$("#sort").value] || SORTS.id;
+  view = items.filter(matches).sort(sort.cmp);
+  const g = $("#grid");
+
+  if(!sort.group){
+    g.innerHTML = view.map(tile).join("");
+  } else {
+    const groups = [];
+    let last = null;
+    view.forEach(it=>{
+      const name = sort.group(it);
+      if(name !== last){ groups.push({name, rows:[]}); last = name; }
+      groups[groups.length-1].rows.push(it);
+    });
+    g.innerHTML = groups.map(grp=>{
+      const m = metals(grp.rows);
+      const txt = metalText(m);
+      const bases = [...new Set(grp.rows.map(r=>r.bag_basis).filter(Boolean))];
+      const bas = ($("#sort").value==="bag" && bases.length===1)
+        ? `<span class="basis b-${bases[0]}">${bases[0]==="owner"?"confirmed by Lucas"
+            :bases[0]==="label"?"confirmed by label"
+            :bases[0]==="sequence"?"from photo sequence":"no bag photo"}</span>` : "";
+      return `<div class="ghead">
+          <h2>${esc(grp.name)}</h2>
+          ${bas}
+          <span class="gm">${m.count} item${m.count===1?"":"s"}</span>
+          ${txt?`<span class="gm gr">${txt}</span>`:""}
+        </div>` + grp.rows.map(tile).join("");
+    }).join("");
+  }
+
+  $("#empty").hidden = view.length>0;
+  $("#tShown").textContent = view.length;
+  $("#tMetal").innerHTML = metalText(metals(view)) ? "&middot; "+metalText(metals(view)) : "";
+  const done = items.filter(i=>i.status!=="needs-id").length;
+  $("#tDone").textContent = done;
+  $("#tAll").textContent = items.length;
+  $("#tBar").style.width = (100*done/items.length).toFixed(1)+"%";
+  g.querySelectorAll(".flip").forEach(b=>b.onclick=()=>open(b.dataset.id));
+}
+
+/* ---------- drawer ---------- */
+function open(id){
+  cur = view.findIndex(i=>i.id===id);
+  if(cur<0) return;
+  paint();
+  $("#scrim").classList.add("open");
+  $("#drawer").classList.add("open");
+}
+function close(){
+  $("#scrim").classList.remove("open");
+  $("#drawer").classList.remove("open");
+  cur=-1; render();
+}
+function step(d){
+  if(cur<0) return;
+  cur = (cur+d+view.length)%view.length;
+  paint();
+}
+function paint(){
+  const it = view[cur];
+  $("#dId").textContent = it.id;
+  const full = "photos/"+(it.photo||"");
+  const hint = it.status==="needs-id"
+    ? `<p class="hint">Not yet identified. Read what is written on the holder first — his
+       notes are usually the fastest route to the date, the grade and what he paid.</p>` : "";
+  const f = k => {
+    if(k==="id"||k==="photo"||k==="orig_photo") return "";
+    const wide = (k==="notes"||k==="variety"||k==="composition");
+    const v = esc(it[k]||"");
+    let input;
+    if(k==="notes") input = `<textarea data-k="${k}">${v}</textarea>`;
+    else if(SELECTS[k]) input = `<select data-k="${k}">`
+      + SELECTS[k].map(o=>`<option${o===(it[k]||"")?" selected":""}>${esc(o)}</option>`).join("")
+      + `</select>`;
+    else input = `<input data-k="${k}" value="${v}">`;
+    return `<div class="f${wide?" wide":""}"><label>${LABELS[k]||k}</label>${input}</div>`;
+  };
+  $("#dBody").innerHTML =
+    `<img class="plate" src="${full}" alt="${it.id}"
+      onerror="this.onerror=null;this.src='${THUMBS[it.id]||""}'">
+     <div class="fields">${hint}${COLUMNS.map(f).join("")}
+       <div class="f wide"><label>Original file</label>
+         <input value="${esc(it.orig_photo||"")}" readonly></div>
+     </div>`;
+  $("#dBody").scrollTop = 0;
+  $("#dBody").querySelectorAll("[data-k]").forEach(el=>{
+    el.oninput = el.onchange = () => {
+      it[el.dataset.k] = el.value;
+      if(el.dataset.k!=="status" && it.status==="needs-id" && el.value.trim())
+        it.status = "identified";
+      const t = items.find(x=>x.id===it.id); Object.assign(t,it);
+    };
+  });
+}
+
+/* ---------- csv ---------- */
+function toCSV(rows){
+  const q = v => /[",\r\n]/.test(v??"") ? '"'+String(v).replace(/"/g,'""')+'"' : (v??"");
+  return [COLUMNS.join(",")].concat(
+    rows.map(r=>COLUMNS.map(c=>q(r[c])).join(","))).join("\r\n");
+}
+function parseCSV(text){
+  const rows=[]; let row=[], cell="", i=0, inQ=false;
+  while(i<text.length){
+    const ch=text[i];
+    if(inQ){
+      if(ch==='"'&&text[i+1]==='"'){cell+='"';i+=2;continue}
+      if(ch==='"'){inQ=false;i++;continue}
+      cell+=ch;i++;continue;
+    }
+    if(ch==='"'){inQ=true;i++;continue}
+    if(ch===','){row.push(cell);cell="";i++;continue}
+    if(ch==='\r'){i++;continue}
+    if(ch==='\n'){row.push(cell);rows.push(row);row=[];cell="";i++;continue}
+    cell+=ch;i++;
+  }
+  if(cell||row.length){row.push(cell);rows.push(row)}
+  const head=rows.shift();
+  return rows.filter(r=>r.length>1).map(r=>Object.fromEntries(head.map((h,j)=>[h,r[j]??""])));
+}
+
+$("#bExport").onclick = () => {
+  const blob = new Blob([toCSV(items)],{type:"text/csv;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "inventory.csv";
+  a.click(); URL.revokeObjectURL(a.href);
+};
+$("#bImport").onclick = () => $("#file").click();
+$("#file").onchange = e => {
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = () => { items = parseCSV(r.result); fillBags(); render(); };
+  r.readAsText(f);
+  e.target.value = "";
+};
+
+/* ---------- wiring ---------- */
+$("#fCat").innerHTML = '<option value="">All categories</option>'
+  + CATS.map(c=>`<option>${c}</option>`).join("");
+$("#sort").innerHTML = Object.entries(SORTS)
+  .map(([k,v])=>`<option value="${k}">Sort: ${v.label}</option>`).join("");
+function fillBags(){
+  const bags = [...new Set(items.map(i=>i.bag).filter(Boolean))]
+    .sort((a,b)=>(parseInt(a,10)||1e9)-(parseInt(b,10)||1e9));
+  const keep = $("#fBag").value;
+  $("#fBag").innerHTML = '<option value="">All bags</option>'
+    + bags.map(b=>`<option value="${esc(b)}">Bag ${esc(b)}</option>`).join("")
+    + '<option value="__none">Not in a bag</option>';
+  $("#fBag").value = keep;
+}
+fillBags();
+$("#q").oninput = render;
+$("#fCat").onchange = render;
+$("#fBag").onchange = render;
+$("#sort").onchange = render;
+[["cNeed","need"],["cKey","key"],["cAuth","auth"]].forEach(([id,k])=>{
+  $("#"+id).onclick = e => {
+    F[k] = !F[k];
+    e.currentTarget.setAttribute("aria-pressed",F[k]);
+    render();
+  };
+});
+$("#bClose").onclick = close;
+$("#scrim").onclick = close;
+$("#bPrev").onclick = () => step(-1);
+$("#bNext").onclick = () => step(1);
+document.addEventListener("keydown", e=>{
+  if(cur<0) return;
+  const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+  if(e.key==="Escape"){ close(); return; }
+  if(typing) return;
+  if(e.key==="ArrowRight"||e.key==="j"){ step(1); e.preventDefault(); }
+  if(e.key==="ArrowLeft"||e.key==="k"){ step(-1); e.preventDefault(); }
+});
+window.addEventListener("beforeunload", e => {
+  if(items.some(i=>i.status!=="needs-id")){ e.preventDefault(); e.returnValue=""; }
+});
+
+render();
+</script>
+</body>
+</html>
