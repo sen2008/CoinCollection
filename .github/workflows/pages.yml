@@ -1,0 +1,83 @@
+name: Publish archive
+
+# Encrypts the catalogue and publishes it to GitHub Pages. The passphrase comes
+# from the ARCHIVE_PASSPHRASE repository secret and never enters the repository:
+# the site is built here and uploaded straight to Pages, so no plaintext — and no
+# ciphertext either — is ever committed.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'coin-archive/coin-archive/catalog.html'
+      - 'coin-archive/coin-archive/photos/**'
+      - 'gate.html'
+      - 'build_site.py'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a running deploy finish rather than publishing a half-built site.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - run: pip install cryptography
+
+      - name: Check the passphrase is set
+        env:
+          ARCHIVE_PASSPHRASE: ${{ secrets.ARCHIVE_PASSPHRASE }}
+        run: |
+          if [ -z "$ARCHIVE_PASSPHRASE" ]; then
+            echo "::error::ARCHIVE_PASSPHRASE is not set. Add it under" \
+                 "Settings → Secrets and variables → Actions before publishing."
+            exit 1
+          fi
+
+      - name: Encrypt the archive
+        env:
+          ARCHIVE_PASSPHRASE: ${{ secrets.ARCHIVE_PASSPHRASE }}
+        run: python3 build_site.py
+
+      - name: Refuse to publish anything readable
+        run: |
+          # A last check that the build produced ciphertext and not the catalogue
+          # itself. index.html is the only file that is meant to be readable.
+          if grep -qa 'THUMBS' docs/app.bin; then
+            echo "::error::docs/app.bin is not encrypted. Refusing to publish."
+            exit 1
+          fi
+          if [ ! -s docs/app.bin ] || [ ! -s docs/index.html ]; then
+            echo "::error::The build did not produce a complete site."
+            exit 1
+          fi
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
