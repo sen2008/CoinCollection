@@ -33,6 +33,14 @@ python3 -c 'import cryptography' 2>/dev/null || die "cryptography is missing.  p
 
 echo "archive: $(wc -l < "$ARCHIVE/inventory.csv") CSV rows, $photos photographs"
 
+if [ -z "${ARCHIVE_PASSPHRASE:-}" ]; then
+  printf 'Passphrase: ' >&2
+  read -rs ARCHIVE_PASSPHRASE
+  printf '\n' >&2
+  [ -n "$ARCHIVE_PASSPHRASE" ] || die "empty passphrase."
+  export ARCHIVE_PASSPHRASE
+fi
+
 # --- 0. don't publish over edits made on the site ---
 if [ -f worker.json ] && [ "${SKIP_SYNC_CHECK:-0}" != "1" ]; then
   if ! python3 sync_down.py --check; then
@@ -72,6 +80,14 @@ fi
 
 git commit -q -m "Update the published catalogue"
 git push -q origin HEAD
+
+# The site prefers the Worker's records over the ones baked into the page, so a
+# stale copy up there would override what was just published on every unlock.
+if [ -f worker.json ]; then
+  echo
+  python3 sync_down.py --push
+fi
+
 echo
 echo "pushed. GitHub Actions is deploying now — the site updates in a minute or two:"
 echo "  https://coin.lucaswalker.net/"

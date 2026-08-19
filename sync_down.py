@@ -8,6 +8,7 @@ archive of record rather than letting a Cloudflare key-value store become it.
 
     python3 sync_down.py            # write the site's records into inventory.csv
     python3 sync_down.py --check    # say whether they differ; change nothing
+    python3 sync_down.py --push     # send inventory.csv up, making local authoritative
 
 Needs worker.json (the Worker's address and token) and the passphrase, since the
 records come back encrypted.
@@ -27,6 +28,10 @@ from pathlib import Path
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 HERE = Path(__file__).parent
+# Cloudflare's browser-integrity check answers the default Python-urllib
+# signature with a 403 and error code 1010, which looks exactly like the Worker
+# rejecting the token. Anything that is not the stock agent string gets through.
+USER_AGENT = "coin-archive-sync/1.0"
 CSV_PATH = HERE / "coin-archive" / "coin-archive" / "inventory.csv"
 STATE = HERE / "vault.json"
 SYNC = HERE / "worker.json"
@@ -35,7 +40,8 @@ SYNC = HERE / "worker.json"
 def fetch(cfg: dict) -> dict | None:
     req = urllib.request.Request(
         cfg["url"].rstrip("/") + "/records",
-        headers={"Authorization": "Bearer " + cfg["read_token"]},
+        headers={"Authorization": "Bearer " + cfg["read_token"],
+                 "User-Agent": USER_AGENT},
     )
     try:
         with urllib.request.urlopen(req, timeout=30) as res:
@@ -45,17 +51,61 @@ def fetch(cfg: dict) -> dict | None:
             return None
         if e.code == 401:
             sys.exit("sync_down.py: the Worker rejected read_token in worker.json.")
+        if e.code == 403:
+            sys.exit("sync_down.py: Cloudflare refused the request (403). If the body "
+                     "mentions error 1010 this is its bot check, not the Worker.")
         sys.exit(f"sync_down.py: the Worker returned {e.code}.")
     except urllib.error.URLError as e:
         sys.exit(f"sync_down.py: could not reach the Worker ({e.reason}).")
 
 
-def open_records(stored: dict, passphrase: str) -> list[dict]:
-    import base64
+def read_key(passphrase: str) -> bytes:
     state = json.loads(STATE.read_text())
-    key = hashlib.pbkdf2_hmac(
+    return hashlib.pbkdf2_hmac(
         "sha256", passphrase.encode(), bytes.fromhex(state["salt"]),
         state["iterations"], 32)
+
+
+def push(cfg: dict, passphrase: str) -> int:
+    """
+    Sends inventory.csv up as the archive's records. Publishing from a computer
+    ends with this, so the site does not keep serving an older set that would
+    then override the freshly published catalogue on every unlock.
+    """
+    import base64
+    stored = fetch(cfg)
+    version = stored["version"] if stored else 0
+
+    rows = list(csv.DictReader(CSV_PATH.open()))
+    nonce = os.urandom(12)
+    sealed = nonce + AESGCM(read_key(passphrase)).encrypt(
+        nonce, json.dumps(rows).encode(), None)
+
+    body = json.dumps({"version": version,
+                       "blob": base64.b64encode(sealed).decode()}).encode()
+    req = urllib.request.Request(
+        cfg["url"].rstrip("/") + "/records", data=body, method="PUT",
+        headers={"Authorization": "Bearer " + cfg["write_token"],
+                 "Content-Type": "application/json",
+                 "User-Agent": USER_AGENT})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as res:
+            out = json.loads(res.read())
+    except urllib.error.HTTPError as e:
+        if e.code == 409:
+            sys.exit("sync_down.py: the site was saved to while this was running. "
+                     "Run it again.")
+        if e.code == 403:
+            sys.exit("sync_down.py: write_token in worker.json is not the Worker's "
+                     "write token.")
+        sys.exit(f"sync_down.py: the Worker returned {e.code} on push.")
+    print(f"pushed {len(rows)} records to the site — version {out['version']}")
+    return 0
+
+
+def open_records(stored: dict, passphrase: str) -> list[dict]:
+    import base64
+    key = read_key(passphrase)
     blob = base64.b64decode(stored["blob"])
     try:
         plain = AESGCM(key).decrypt(blob[:12], blob[12:], None)
@@ -76,13 +126,31 @@ def as_csv(rows: list[dict], columns: list[str]) -> str:
     return buf.getvalue()
 
 
+def ask(check_only: bool) -> str:
+    passphrase = os.environ.get("ARCHIVE_PASSPHRASE")
+    if passphrase:
+        return passphrase
+    if not sys.stdin.isatty():
+        sys.exit("sync_down.py: set ARCHIVE_PASSPHRASE, or run this from a terminal.")
+    return getpass("Passphrase: ")
+
+
 def main():
     check_only = "--check" in sys.argv
+    pushing = "--push" in sys.argv
 
     if not SYNC.exists():
         if check_only:
             return 0
         sys.exit("sync_down.py: worker.json is missing — nothing to pull from.")
+    if pushing:
+        if not CSV_PATH.exists():
+            sys.exit(f"sync_down.py: {CSV_PATH} is missing.")
+        cfg = json.loads(SYNC.read_text())
+        for field in ("url", "write_token"):
+            if not cfg.get(field):
+                sys.exit(f"sync_down.py: worker.json is missing {field!r}.")
+        return push(cfg, ask(False))
     if not CSV_PATH.exists():
         sys.exit(f"sync_down.py: {CSV_PATH} is missing.")
 
@@ -92,11 +160,7 @@ def main():
         print("nothing saved on the site yet")
         return 0
 
-    passphrase = os.environ.get("ARCHIVE_PASSPHRASE") or (
-        getpass("Passphrase: ") if sys.stdin.isatty()
-        else sys.exit("sync_down.py: set ARCHIVE_PASSPHRASE, or run this from a terminal."))
-
-    rows = open_records(stored, passphrase)
+    rows = open_records(stored, ask(check_only))
     columns = list(csv.DictReader(CSV_PATH.open()).fieldnames or [])
     text = as_csv(rows, columns)
 
