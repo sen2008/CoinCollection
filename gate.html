@@ -171,7 +171,7 @@ async function deriveKey(passphrase){
     "raw", new TextEncoder().encode(passphrase), "PBKDF2", false, ["deriveKey"]);
   return crypto.subtle.deriveKey(
     { name:"PBKDF2", salt:unhex(CONFIG.salt), iterations:CONFIG.iterations, hash:"SHA-256" },
-    base, { name:"AES-GCM", length:256 }, false, ["decrypt"]);
+    base, { name:"AES-GCM", length:256 }, false, ["decrypt", "encrypt"]);
 }
 
 /* Every file is stored as a 12-byte nonce followed by AES-256-GCM ciphertext. */
@@ -180,6 +180,24 @@ async function decrypt(key, buffer){
   return crypto.subtle.decrypt(
     { name:"AES-GCM", iv:bytes.subarray(0, 12) }, key, bytes.subarray(12));
 }
+
+async function encrypt(key, plaintext){
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const body = new Uint8Array(await crypto.subtle.encrypt({ name:"AES-GCM", iv }, key, plaintext));
+  const out = new Uint8Array(iv.length + body.length);
+  out.set(iv); out.set(body, iv.length);
+  return out;
+}
+
+/* Chunked: String.fromCharCode(...bytes) overflows the stack on a payload this size. */
+function b64(bytes){
+  let s = "";
+  for(let i = 0; i < bytes.length; i += 0x8000){
+    s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(s);
+}
+const unb64 = str => Uint8Array.from(atob(str), c => c.charCodeAt(0));
 
 /*
  * Deliberately the default cache mode. Rebuilding under a new passphrase changes
@@ -214,6 +232,78 @@ function makeVault(key){
       }
       return pending;
     },
+    /*
+     * Wired up by the catalogue once it has booted, when the build embedded a
+     * Worker address. The Worker only ever holds ciphertext: records are sealed
+     * here, under the same key that opened the archive.
+     */
+    async attach(archive){
+      const cfg = window.ARCHIVE_SYNC;
+      if(!cfg || !cfg.url) return;
+
+      const btn = document.getElementById("bSync");
+      const out = document.getElementById("syncMsg");
+      const say = (text, bad) => {
+        if(!out) return;
+        out.textContent = text;
+        out.style.color = bad ? "#E0776C" : "";
+      };
+      const when = iso => { try { return new Date(iso).toLocaleString(); } catch { return iso; } };
+
+      let version = 0;
+
+      const api = (method, body) => fetch(cfg.url + "/records", {
+        method,
+        cache: "no-store",
+        headers: Object.assign(
+          { authorization: "Bearer " + cfg.token },
+          body ? { "content-type": "application/json" } : {}),
+        body: body ? JSON.stringify(body) : undefined
+      });
+
+      try {
+        say("Loading the latest…");
+        const res = await api("GET");
+        if(res.status === 404){
+          say("No saved edits yet — showing the published copy");
+        } else if(!res.ok){
+          throw new Error("HTTP " + res.status);
+        } else {
+          const stored = await res.json();
+          const plain = await decrypt(key, unb64(stored.blob).buffer);
+          archive.replace(JSON.parse(new TextDecoder().decode(plain)));
+          version = stored.version;
+          say("Up to date · saved " + when(stored.updated));
+        }
+      } catch (err) {
+        // The published copy is already on screen, so this is not fatal.
+        say("Could not reach the archive — showing the published copy", true);
+      }
+
+      if(!btn) return;
+      btn.onclick = async () => {
+        btn.disabled = true;
+        say("Saving…");
+        try {
+          const plain = new TextEncoder().encode(JSON.stringify(archive.items));
+          const res = await api("PUT", { version, blob: b64(await encrypt(key, plain)) });
+          if(res.status === 409){
+            const other = await res.json();
+            say("Someone else saved at " + when(other.updated) + " — reload before saving", true);
+          } else if(!res.ok){
+            throw new Error("HTTP " + res.status);
+          } else {
+            const done = await res.json();
+            version = done.version;
+            say("Saved · " + when(done.updated));
+          }
+        } catch (err) {
+          say("Save failed: " + err.message, true);
+        }
+        btn.disabled = false;
+      };
+    },
+
     async plate(img){
       const name = img && img.dataset.plate;
       if(!name) return;

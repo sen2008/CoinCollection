@@ -15,6 +15,8 @@ holding a copy.
 ```
 publish.sh               rebuild, encrypt and deploy in one command
 build_site.py            encrypts the catalogue into docs/
+sync_down.py             pulls edits made on the site back into inventory.csv
+worker/archive-sync.js   optional Cloudflare Worker, so the site can save edits
 gate.html                markup for the unlock page (edit here, not in docs/)
 docs/                    the encrypted site, committed and served by Pages
 
@@ -164,6 +166,66 @@ tar -xzf 4-contact-sheets.tgz -C coin-archive/coin-archive
 Everything lands in paths `.gitignore` already excludes, so none of it can be
 committed by accident. `publish.sh` checks the archive is present and stops with
 these instructions if it isn't.
+
+## Saving edits from the website
+
+By default the site is read-only: edits live in the browser tab and leave only
+through **Save CSV**. GitHub Pages is a static file host, so there is nothing to
+save back to.
+
+`worker/archive-sync.js` is a small Cloudflare Worker that fixes that. It holds
+one blob of records, and the site pulls the latest on unlock and pushes edits
+when you press **Save to archive**. The records are sealed in the browser under
+the same passphrase, so the Worker, its KV store and Cloudflare hold nothing but
+ciphertext.
+
+Writes are compare-and-set: a tab that has not seen someone else's save is
+refused with a 409 rather than quietly overwriting them.
+
+### Setting it up
+
+1. In the Cloudflare dashboard, create a **KV namespace** (any name).
+2. Create a **Worker**, paste in `worker/archive-sync.js`, and deploy.
+3. Bind the KV namespace to the Worker as `ARCHIVE`.
+4. Add two variables: `TOKEN`, a long random string, as a **secret**; and
+   `ORIGIN`, set to `https://coin.lucaswalker.net`.
+5. Locally, write `worker.json` — it is gitignored, and the token is baked into
+   the encrypted site rather than published:
+
+```json
+{
+  "url": "https://your-worker.workers.dev",
+  "token": "the same long random string"
+}
+```
+
+6. Run `./publish.sh`.
+
+Without `worker.json` the build simply omits all of this and the site stays
+read-only, so nothing breaks if you never set it up or take it away later.
+
+### The loop once it is running
+
+Edit on the site from anywhere, press **Save to archive**, and any other device
+with the passphrase sees it on next unlock. `inventory.csv` is still the archive
+of record, so bring those edits home before republishing:
+
+```bash
+python3 sync_down.py      # pull the site's records into inventory.csv
+./publish.sh
+```
+
+`publish.sh` checks this for you and refuses to publish over edits made on the
+site, naming the command to pull them down. `SKIP_SYNC_CHECK=1` overrides it if
+you really do mean to discard them.
+
+### What the token means
+
+Anyone who can unlock the site can also read the write token out of the
+decrypted page, so everyone you share the passphrase with can save. That is the
+intent for a family archive, but it is worth being clear that the passphrase now
+grants writing as well as reading. The blast radius is one blob of records: the
+token cannot touch the repository, the photographs, or anything else.
 
 ### What this does and does not protect
 

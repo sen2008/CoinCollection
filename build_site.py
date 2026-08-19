@@ -33,6 +33,7 @@ CATALOG = ARCHIVE / "catalog.html"
 PHOTOS = ARCHIVE / "photos"
 GATE = HERE / "gate.html"
 STATE = HERE / "vault.json"
+SYNC = HERE / "worker.json"
 DOCS = HERE / "docs"
 
 ITERATIONS = 600_000
@@ -92,9 +93,37 @@ PATCHES = [
     ),
 ]
 
+# Applied only when worker.json is present. Gives the unlock page a handle on
+# the records so it can pull the latest from the Worker and push edits back,
+# and puts a Save button next to the CSV download.
+SYNC_PATCHES = [
+    (
+        '    <button class="btn" id="bImport">Load CSV</button>\n'
+        '    <button class="btn btn-key" id="bExport">Save CSV</button>\n',
+        '    <button class="btn" id="bImport">Load CSV</button>\n'
+        '    <button class="btn" id="bExport">Save CSV</button>\n'
+        '    <button class="btn btn-key" id="bSync">Save to archive</button>\n'
+        '    <span class="tally" id="syncMsg"></span>\n',
+    ),
+    (
+        "\nrender();\n</script>",
+        "\nrender();\n"
+        "\n/* Handed to the unlock page, which holds the key the records are sealed with. */\n"
+        "window.ARCHIVE = {\n"
+        "  get items(){ return items; },\n"
+        "  replace(rows){ items = rows; render(); },\n"
+        "};\n"
+        "window.VAULT && VAULT.attach && VAULT.attach(window.ARCHIVE);\n"
+        "</script>",
+    ),
+]
 
-def patch_catalog(html: str) -> str:
-    for old, new in PATCHES:
+
+def patch_catalog(html: str, sync: dict | None) -> str:
+    patches = list(PATCHES)
+    if sync:
+        patches += SYNC_PATCHES
+    for old, new in patches:
         found = html.count(old)
         if found != 1:
             sys.exit(
@@ -103,6 +132,18 @@ def patch_catalog(html: str) -> str:
                 f"  looking for: {old.strip()[:70]}…"
             )
         html = html.replace(old, new)
+
+    if sync:
+        # The Worker's address and write token travel inside the ciphertext, so
+        # only someone who can already unlock the archive can reach them.
+        anchor = "const DATA = "
+        assert html.count(anchor) == 1
+        html = html.replace(
+            anchor,
+            "window.ARCHIVE_SYNC = "
+            + json.dumps({"url": sync["url"].rstrip("/"), "token": sync["token"]})
+            + ";\n" + anchor,
+        )
     return html
 
 
@@ -155,6 +196,17 @@ def read_passphrase() -> str:
     return passphrase
 
 
+def load_sync() -> dict | None:
+    """Optional. Without worker.json the site is exactly as it was: read-only."""
+    if not SYNC.exists():
+        return None
+    cfg = json.loads(SYNC.read_text())
+    for field in ("url", "token"):
+        if not cfg.get(field):
+            sys.exit(f"build_site.py: worker.json is missing {field!r}.")
+    return cfg
+
+
 def main():
     for required in (CATALOG, GATE):
         if not required.exists():
@@ -164,7 +216,8 @@ def main():
     salt = json.loads(STATE.read_text())["salt"]
 
     # The catalogue, patched and sealed.
-    app = patch_catalog(CATALOG.read_text()).encode()
+    sync = load_sync()
+    app = patch_catalog(CATALOG.read_text(), sync).encode()
     changed = write(DOCS / "app.bin", seal(key, "app.bin", app))
 
     # The plates, one file each, fetched and decrypted only when a record is opened.
@@ -199,6 +252,7 @@ def main():
     print(f"docs/  {len(photos)} plates + catalogue, {total/1e6:.1f} MB")
     print(f"{changed} file(s) written, {stale} removed")
     print(f"AES-256-GCM, PBKDF2-SHA256 x {ITERATIONS:,}")
+    print("saving to the archive: " + (sync["url"] if sync else "off (no worker.json)"))
 
 
 if __name__ == "__main__":

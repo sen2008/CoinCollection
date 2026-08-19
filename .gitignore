@@ -38,3 +38,7 @@ __pycache__/
 
 # The collection README lives with the collection, not in the public repo
 coin-archive/coin-archive/README.md
+
+# The sync Worker's address and write token. Local only — the token is
+# baked into the encrypted site, not published in the clear.
+worker.json

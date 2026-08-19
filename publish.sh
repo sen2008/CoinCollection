@@ -33,6 +33,17 @@ python3 -c 'import cryptography' 2>/dev/null || die "cryptography is missing.  p
 
 echo "archive: $(wc -l < "$ARCHIVE/inventory.csv") CSV rows, $photos photographs"
 
+# --- 0. don't publish over edits made on the site ---
+if [ -f worker.json ] && [ "${SKIP_SYNC_CHECK:-0}" != "1" ]; then
+  if ! python3 sync_down.py --check; then
+    die "the site has edits that inventory.csv does not.
+Pull them down first:
+  python3 sync_down.py
+Or publish the local CSV anyway, discarding them:
+  SKIP_SYNC_CHECK=1 ./publish.sh"
+  fi
+fi
+
 # --- 1. inventory.csv -> catalog.html ---
 echo
 echo "[1/3] rebuilding the catalogue"
