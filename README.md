@@ -13,6 +13,7 @@ holding a copy.
 ## What's here
 
 ```
+publish.sh               rebuild, encrypt and deploy in one command
 build_site.py            encrypts the catalogue into docs/
 gate.html                markup for the unlock page (edit here, not in docs/)
 docs/                    the encrypted site, committed and served by Pages
@@ -99,16 +100,48 @@ overwrite everything entered since.
 ## Publishing it behind a passphrase
 
 `build_site.py` encrypts the catalogue into `docs/`, and the unlock page decrypts
-it in the browser once the passphrase is entered.
+it in the browser once the passphrase is entered. `publish.sh` runs the whole
+loop — rebuild, encrypt, commit, push:
 
 ```bash
-pip install cryptography
-ARCHIVE_PASSPHRASE='…' python3 build_site.py
-git add docs && git commit -m "Rebuild site" && git push
+./publish.sh
 ```
+
+It prompts for the passphrase rather than reading it from the environment, so it
+stays out of your shell history. `--no-push` builds without deploying.
 
 Pushing `docs/` is what publishes. `.github/workflows/pages.yml` uploads it to
 Pages and refuses to deploy if anything in `docs/` turns out to be readable.
+
+### Updating the catalogue
+
+1. Open the site (or `catalog.html` locally), edit records, press **Save CSV**.
+2. Put that downloaded file at `coin-archive/coin-archive/inventory.csv`.
+3. Run `./publish.sh`.
+
+The site updates a minute or two later. Editing a record rewrites only
+`docs/app.bin`; the 218 encrypted plates are untouched unless a photograph
+changes, because each file's nonce is derived from its own content.
+
+### First-time setup on a new machine
+
+The collection is not in the repository, so a fresh clone needs it restored
+alongside the tooling:
+
+```bash
+git clone https://github.com/sen2008/CoinCollection.git
+cd CoinCollection
+pip install Pillow cryptography
+
+tar -xzf 1-archive-data.tgz
+tar -xzf 2-photos-part1.tgz -C coin-archive/coin-archive/photos
+tar -xzf 3-photos-part2.tgz -C coin-archive/coin-archive/photos
+tar -xzf 4-contact-sheets.tgz -C coin-archive/coin-archive
+```
+
+Everything lands in paths `.gitignore` already excludes, so none of it can be
+committed by accident. `publish.sh` checks the archive is present and stops with
+these instructions if it isn't.
 
 That writes three things:
 
