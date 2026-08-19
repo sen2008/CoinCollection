@@ -26,10 +26,6 @@ coin-archive/coin-archive/mark_duplicates.py
 /catalog.html
 /inventory.csv
 
-# Local build state: the salt, and a check value that catches a mistyped
-# passphrase on a rebuild. Not a secret, but not worth publishing either.
-vault.json
-
 # Windows "downloaded from the internet" metadata
 *:Zone.Identifier
 *.Identifier
