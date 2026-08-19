@@ -113,6 +113,28 @@ stays out of your shell history. `--no-push` builds without deploying.
 Pushing `docs/` is what publishes. `.github/workflows/pages.yml` uploads it to
 Pages and refuses to deploy if anything in `docs/` turns out to be readable.
 
+That writes three things:
+
+| file | what it is |
+|---|---|
+| `docs/index.html` | the unlock page — the only readable file on the site |
+| `docs/app.bin` | `catalog.html`, encrypted |
+| `docs/p/C-001.jpg.bin` … | each full-resolution plate, encrypted separately |
+
+Everything is AES-256-GCM under a key derived from the passphrase with
+PBKDF2-SHA256 at 600,000 iterations. The unlock page carries the salt and the
+iteration count, which are not secrets. The passphrase is never stored anywhere
+and cannot be reset — a forgotten one means rebuilding the site with a new one.
+
+Plates are fetched and decrypted one at a time, only when a record is opened, so
+unlocking downloads the catalogue and nothing else. The drawer shows the embedded
+thumbnail immediately and swaps in the full plate as it arrives.
+
+Nonces are derived from file content, so rebuilding unchanged files reproduces
+identical bytes and git stays quiet. `vault.json` carries the salt; it is
+committed, holds nothing secret, and catches a mistyped passphrase before it
+republishes the site under a new one.
+
 ### Updating the catalogue
 
 1. Open the site (or `catalog.html` locally), edit records, press **Save CSV**.
@@ -142,27 +164,6 @@ tar -xzf 4-contact-sheets.tgz -C coin-archive/coin-archive
 Everything lands in paths `.gitignore` already excludes, so none of it can be
 committed by accident. `publish.sh` checks the archive is present and stops with
 these instructions if it isn't.
-
-That writes three things:
-
-| file | what it is |
-|---|---|
-| `docs/index.html` | the unlock page — the only readable file on the site |
-| `docs/app.bin` | `catalog.html`, encrypted |
-| `docs/p/C-001.jpg.bin` … | each full-resolution plate, encrypted separately |
-
-Everything is AES-256-GCM under a key derived from the passphrase with
-PBKDF2-SHA256 at 600,000 iterations. The unlock page carries the salt and the
-iteration count, which are not secrets. The passphrase is never stored anywhere
-and cannot be reset — a forgotten one means rebuilding the site with a new one.
-
-Plates are fetched and decrypted one at a time, only when a record is opened, so
-unlocking downloads the catalogue and nothing else. The drawer shows the embedded
-thumbnail immediately and swaps in the full plate as it arrives.
-
-Nonces are derived from file content, so rebuilding unchanged files reproduces
-identical bytes and git stays quiet. `vault.json` holds the salt locally and
-catches a mistyped passphrase before it republishes the site under a new one.
 
 ### What this does and does not protect
 
