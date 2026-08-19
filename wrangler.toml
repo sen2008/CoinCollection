@@ -4,10 +4,9 @@
 # on every push, so this file is what tells it which script to publish and what
 # to bind to it.
 #
-# READ_TOKEN and WRITE_TOKEN are deliberately absent: they are secrets, set in
-# the dashboard under Settings -> Variables and Secrets. `wrangler deploy` leaves
-# secrets alone, but it does replace [vars], so ORIGIN belongs here and the
-# tokens do not.
+# The token values live in the account's Secrets Store, not in this file. Only
+# the reference is here; `wrangler deploy` replaces [vars] but never touches the
+# secrets themselves.
 #
 # READ_TOKEN lets the site fetch saved edits and is carried inside the encrypted
 # page. WRITE_TOKEN is what actually permits saving, and is sealed again under a
@@ -26,3 +25,16 @@ ORIGIN = "https://coin.lucaswalker.net"
 [[kv_namespaces]]
 binding = "ARCHIVE"
 id = "54666cded7134d579efaf51d9450051d"
+
+# Secrets Store. `secret_name` must match what the secrets are called in the
+# store; the Worker reads them through .get() and also accepts plain Worker
+# secrets, so either wiring works.
+[[secrets_store_secrets]]
+binding = "READ_TOKEN"
+store_id = "672bcefb63c0457587992575884b04c5"
+secret_name = "READ_TOKEN"
+
+[[secrets_store_secrets]]
+binding = "WRITE_TOKEN"
+store_id = "672bcefb63c0457587992575884b04c5"
+secret_name = "WRITE_TOKEN"

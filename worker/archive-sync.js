@@ -48,6 +48,19 @@ const cors = origin => ({
   vary: "origin",
 });
 
+/*
+ * A token reaches the Worker either as a plain string (a Worker secret set in
+ * Settings -> Variables and Secrets) or as a Secrets Store binding, which hands
+ * the value back through .get(). Accept both, so how it was wired up in the
+ * dashboard does not change whether this works.
+ */
+async function secret(binding) {
+  if (!binding) return null;
+  if (typeof binding === "string") return binding;
+  if (typeof binding.get === "function") return await binding.get();
+  return null;
+}
+
 /* Length-independent comparison, so a wrong token leaks nothing by timing. */
 function tokenOk(given, expected) {
   if (typeof given !== "string" || typeof expected !== "string") return false;
@@ -73,14 +86,23 @@ export default {
       return json({ error: "not found" }, 404, origin);
     }
 
-    if (!env.READ_TOKEN || !env.WRITE_TOKEN) {
+    const [readToken, writeToken] = await Promise.all([
+      secret(env.READ_TOKEN),
+      secret(env.WRITE_TOKEN),
+    ]);
+    if (!readToken || !writeToken) {
       return json({ error: "worker is missing its tokens" }, 500, origin);
+    }
+    if (readToken === writeToken) {
+      // Otherwise the read token would silently grant writing, which is the one
+      // thing this split exists to prevent.
+      return json({ error: "read and write tokens must differ" }, 500, origin);
     }
 
     const auth = request.headers.get("authorization") || "";
     const given = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-    const canWrite = tokenOk(given, env.WRITE_TOKEN);
-    const canRead = canWrite || tokenOk(given, env.READ_TOKEN);
+    const canWrite = tokenOk(given, writeToken);
+    const canRead = canWrite || tokenOk(given, readToken);
     if (!canRead) {
       return json({ error: "unauthorized" }, 401, origin);
     }
