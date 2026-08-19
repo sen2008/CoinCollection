@@ -25,4 +25,4 @@ ORIGIN = "https://coin.lucaswalker.net"
 # Storage & Databases -> KV.
 [[kv_namespaces]]
 binding = "ARCHIVE"
-id = "PASTE_YOUR_KV_NAMESPACE_ID_HERE"
+id = "54666cded7134d579efaf51d9450051d"
