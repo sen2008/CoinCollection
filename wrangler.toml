@@ -1,0 +1,23 @@
+# Deploy config for the archive-sync Worker.
+#
+# Cloudflare Workers Builds runs `npx wrangler deploy` from the repository root
+# on every push, so this file is what tells it which script to publish and what
+# to bind to it.
+#
+# TOKEN is deliberately absent: it is a secret, set in the dashboard under
+# Settings -> Variables and Secrets. `wrangler deploy` leaves secrets alone, but
+# it does replace [vars], so ORIGIN belongs here rather than in the dashboard.
+
+name = "coincollection"
+main = "worker/archive-sync.js"
+compatibility_date = "2026-08-19"
+
+# Only this origin may call the Worker from a browser.
+[vars]
+ORIGIN = "https://coin.lucaswalker.net"
+
+# The records live here. `id` is the KV namespace's ID from
+# Storage & Databases -> KV.
+[[kv_namespaces]]
+binding = "ARCHIVE"
+id = "PASTE_YOUR_KV_NAMESPACE_ID_HERE"
