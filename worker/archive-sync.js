@@ -6,17 +6,24 @@
  * encrypted in the browser under the same passphrase that unlocks the site, so
  * this Worker, its KV store and Cloudflare itself hold nothing but ciphertext.
  *
- * Two routes, both requiring the bearer token that is baked into the encrypted
- * site (so only someone who can already unlock the archive can reach them):
+ * Two tokens, so that reading and writing are separate privileges:
  *
  *   GET  /records  -> {version, updated, blob} | 404 when nothing is stored yet
+ *                     accepts either token
  *   PUT  /records  <- {version, blob}          -> {version, updated}
+ *                     accepts only WRITE_TOKEN
+ *
+ * The read token is carried inside the site, so unlocking with the everyday
+ * passphrase is enough to see other people's edits. The write token is sealed
+ * again under a second, randomly generated passphrase, so someone who can read
+ * the archive still cannot save to it without being given that separately.
  *
  * PUT is a compare-and-set: `version` must match what is stored, or 0 for the
  * first write. A mismatch returns 409 so a second device cannot silently
  * clobber edits it never saw.
  *
- * Bindings: ARCHIVE (KV namespace), TOKEN (secret), ORIGIN (site URL).
+ * Bindings: ARCHIVE (KV namespace), READ_TOKEN and WRITE_TOKEN (secrets),
+ * ORIGIN (site URL).
  */
 
 const KEY = "records";
@@ -66,9 +73,15 @@ export default {
       return json({ error: "not found" }, 404, origin);
     }
 
+    if (!env.READ_TOKEN || !env.WRITE_TOKEN) {
+      return json({ error: "worker is missing its tokens" }, 500, origin);
+    }
+
     const auth = request.headers.get("authorization") || "";
     const given = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-    if (!env.TOKEN || !tokenOk(given, env.TOKEN)) {
+    const canWrite = tokenOk(given, env.WRITE_TOKEN);
+    const canRead = canWrite || tokenOk(given, env.READ_TOKEN);
+    if (!canRead) {
       return json({ error: "unauthorized" }, 401, origin);
     }
 
@@ -79,6 +92,12 @@ export default {
     }
 
     if (request.method === "PUT") {
+      // Reading is not enough to save. This is the whole point of the second
+      // passphrase, so it is checked before anything is parsed.
+      if (!canWrite) {
+        return json({ error: "read-only token" }, 403, origin);
+      }
+
       let body;
       try {
         body = await request.json();

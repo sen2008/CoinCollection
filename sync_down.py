@@ -35,7 +35,7 @@ SYNC = HERE / "worker.json"
 def fetch(cfg: dict) -> dict | None:
     req = urllib.request.Request(
         cfg["url"].rstrip("/") + "/records",
-        headers={"Authorization": "Bearer " + cfg["token"]},
+        headers={"Authorization": "Bearer " + cfg["read_token"]},
     )
     try:
         with urllib.request.urlopen(req, timeout=30) as res:
@@ -44,7 +44,7 @@ def fetch(cfg: dict) -> dict | None:
         if e.code == 404:
             return None
         if e.code == 401:
-            sys.exit("sync_down.py: the Worker rejected the token in worker.json.")
+            sys.exit("sync_down.py: the Worker rejected read_token in worker.json.")
         sys.exit(f"sync_down.py: the Worker returned {e.code}.")
     except urllib.error.URLError as e:
         sys.exit(f"sync_down.py: could not reach the Worker ({e.reason}).")

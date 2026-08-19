@@ -17,10 +17,12 @@ be recovered or reset without rebuilding. Use a long one.
 Re-run this after build_catalog.py, then commit docs/.
 """
 
+import base64
 import hashlib
 import hmac
 import json
 import os
+import secrets
 import sys
 from getpass import getpass
 from pathlib import Path
@@ -40,6 +42,9 @@ ITERATIONS = 600_000
 SALT_BYTES = 16
 NONCE_BYTES = 12
 CHECK_LABEL = b"coin-archive/vault-check"
+# Unambiguous alphabet: no l/i/o/1/0 to misread when typing it on a phone.
+WORD_ALPHABET = "0123456789abcdefghjkmnpqrstvwxyz"
+WRITE_GROUPS, WRITE_GROUP_LEN = 5, 4  # 100 bits
 PLATE_TYPES = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".tif", ".tiff", ".heic"}
 
 
@@ -140,9 +145,7 @@ def patch_catalog(html: str, sync: dict | None) -> str:
         assert html.count(anchor) == 1
         html = html.replace(
             anchor,
-            "window.ARCHIVE_SYNC = "
-            + json.dumps({"url": sync["url"].rstrip("/"), "token": sync["token"]})
-            + ";\n" + anchor,
+            "window.ARCHIVE_SYNC = " + json.dumps(sync) + ";\n" + anchor,
         )
     return html
 
@@ -196,15 +199,63 @@ def read_passphrase() -> str:
     return passphrase
 
 
+def new_write_passphrase() -> str:
+    """Random, because nobody should be choosing this one."""
+    groups = [
+        "".join(secrets.choice(WORD_ALPHABET) for _ in range(WRITE_GROUP_LEN))
+        for _ in range(WRITE_GROUPS)
+    ]
+    return "-".join(groups)
+
+
+def write_salt() -> bytes:
+    """Kept in vault.json beside the read salt, so the sealed token is stable."""
+    state = json.loads(STATE.read_text())
+    if "write_salt" not in state:
+        state["write_salt"] = os.urandom(SALT_BYTES).hex()
+        STATE.write_text(json.dumps(state, indent=2) + "\n")
+    return bytes.fromhex(state["write_salt"])
+
+
 def load_sync() -> dict | None:
     """Optional. Without worker.json the site is exactly as it was: read-only."""
     if not SYNC.exists():
         return None
     cfg = json.loads(SYNC.read_text())
-    for field in ("url", "token"):
+    for field in ("url", "read_token", "write_token"):
         if not cfg.get(field):
             sys.exit(f"build_site.py: worker.json is missing {field!r}.")
+
+    if not cfg.get("write_passphrase"):
+        cfg["write_passphrase"] = new_write_passphrase()
+        SYNC.write_text(json.dumps(cfg, indent=2) + "\n")
+        print()
+        print("  A write passphrase has been generated. Saving edits on the site")
+        print("  asks for this; the everyday passphrase alone stays read-only.")
+        print()
+        print(f"      {cfg['write_passphrase']}")
+        print()
+        print("  It is stored in worker.json, which git ignores. Put it somewhere")
+        print("  safe now — it is not recoverable from the published site.")
+        print()
     return cfg
+
+
+def seal_write_token(cfg: dict) -> dict:
+    """
+    Seals the write token under the second passphrase, so it survives in the
+    published page as ciphertext. Decrypting the site gets you the records; it
+    does not get you the ability to change them.
+    """
+    salt = write_salt()
+    key = derive(cfg["write_passphrase"], salt)
+    token = cfg["write_token"].encode()
+    return {
+        "url": cfg["url"].rstrip("/"),
+        "readToken": cfg["read_token"],
+        "salt": salt.hex(),
+        "writer": base64.b64encode(seal(key, "writer", token)).decode(),
+    }
 
 
 def main():
@@ -216,7 +267,8 @@ def main():
     salt = json.loads(STATE.read_text())["salt"]
 
     # The catalogue, patched and sealed.
-    sync = load_sync()
+    cfg = load_sync()
+    sync = seal_write_token(cfg) if cfg else None
     app = patch_catalog(CATALOG.read_text(), sync).encode()
     changed = write(DOCS / "app.bin", seal(key, "app.bin", app))
 
@@ -253,6 +305,8 @@ def main():
     print(f"{changed} file(s) written, {stale} removed")
     print(f"AES-256-GCM, PBKDF2-SHA256 x {ITERATIONS:,}")
     print("saving to the archive: " + (sync["url"] if sync else "off (no worker.json)"))
+    if sync:
+        print("the write token is sealed under the write passphrase")
 
 
 if __name__ == "__main__":

@@ -4,9 +4,14 @@
 # on every push, so this file is what tells it which script to publish and what
 # to bind to it.
 #
-# TOKEN is deliberately absent: it is a secret, set in the dashboard under
-# Settings -> Variables and Secrets. `wrangler deploy` leaves secrets alone, but
-# it does replace [vars], so ORIGIN belongs here rather than in the dashboard.
+# READ_TOKEN and WRITE_TOKEN are deliberately absent: they are secrets, set in
+# the dashboard under Settings -> Variables and Secrets. `wrangler deploy` leaves
+# secrets alone, but it does replace [vars], so ORIGIN belongs here and the
+# tokens do not.
+#
+# READ_TOKEN lets the site fetch saved edits and is carried inside the encrypted
+# page. WRITE_TOKEN is what actually permits saving, and is sealed again under a
+# separate randomly generated write passphrase.
 
 name = "coincollection"
 main = "worker/archive-sync.js"

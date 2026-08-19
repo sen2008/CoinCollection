@@ -176,8 +176,8 @@ save back to.
 `worker/archive-sync.js` is a small Cloudflare Worker that fixes that. It holds
 one blob of records, and the site pulls the latest on unlock and pushes edits
 when you press **Save to archive**. The records are sealed in the browser under
-the same passphrase, so the Worker, its KV store and Cloudflare hold nothing but
-ciphertext.
+the everyday passphrase, so the Worker, its KV store and Cloudflare hold nothing
+but ciphertext. Saving needs a second passphrase — see below.
 
 Writes are compare-and-set: a tab that has not seen someone else's save is
 refused with a 409 rather than quietly overwriting them.
@@ -187,19 +187,21 @@ refused with a 409 rather than quietly overwriting them.
 1. In the Cloudflare dashboard, create a **KV namespace** (any name).
 2. Create a **Worker**, paste in `worker/archive-sync.js`, and deploy.
 3. Bind the KV namespace to the Worker as `ARCHIVE`.
-4. Add two variables: `TOKEN`, a long random string, as a **secret**; and
-   `ORIGIN`, set to `https://coin.lucaswalker.net`.
-5. Locally, write `worker.json` — it is gitignored, and the token is baked into
-   the encrypted site rather than published:
+4. Add two **secrets**: `READ_TOKEN` and `WRITE_TOKEN`, each a long random
+   string. `ORIGIN` is set from `wrangler.toml`, not the dashboard.
+5. Locally, write `worker.json` — gitignored, and never published in the clear:
 
 ```json
 {
   "url": "https://your-worker.workers.dev",
-  "token": "the same long random string"
+  "read_token": "the first random string",
+  "write_token": "the second random string"
 }
 ```
 
-6. Run `./publish.sh`.
+6. Run `./publish.sh`. It generates a **write passphrase** on first run, prints
+   it once, and stores it in `worker.json`. Save it somewhere safe — it is not
+   recoverable from the published site.
 
 Without `worker.json` the build simply omits all of this and the site stays
 read-only, so nothing breaks if you never set it up or take it away later.
@@ -219,13 +221,27 @@ python3 sync_down.py      # pull the site's records into inventory.csv
 site, naming the command to pull them down. `SKIP_SYNC_CHECK=1` overrides it if
 you really do mean to discard them.
 
-### What the token means
+### Two passphrases
 
-Anyone who can unlock the site can also read the write token out of the
-decrypted page, so everyone you share the passphrase with can save. That is the
-intent for a family archive, but it is worth being clear that the passphrase now
-grants writing as well as reading. The blast radius is one blob of records: the
-token cannot touch the repository, the photographs, or anything else.
+Reading and writing are separate privileges, so sharing the archive does not
+hand out the ability to change it.
+
+| | passphrase | what it opens |
+|---|---|---|
+| **Read** | the one you chose | the catalogue, the plates, and other people's saved edits |
+| **Write** | randomly generated, 100 bits | saving edits back to the archive |
+
+The site carries a read token, which is enough to fetch saved records. The write
+token is sealed *again* under the write passphrase, so someone who decrypts the
+entire page still cannot recover it — and the Worker refuses a write from the
+read token with a 403 regardless.
+
+The write passphrase is asked for the first time you press **Save to archive**
+in a tab, then held in memory for that tab. Give it only to whoever should be
+editing; everyone else gets the everyday passphrase and a read-only archive.
+
+Its blast radius is one blob of records either way: neither token can touch the
+repository, the photographs, or anything else.
 
 ### What this does and does not protect
 

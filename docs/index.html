@@ -166,11 +166,12 @@ const painted = () => new Promise(r => requestAnimationFrame(() => requestAnimat
 
 const unhex = h => Uint8Array.from(h.match(/../g) || [], b => parseInt(b, 16));
 
-async function deriveKey(passphrase){
+async function deriveKey(passphrase, saltHex){
   const base = await crypto.subtle.importKey(
     "raw", new TextEncoder().encode(passphrase), "PBKDF2", false, ["deriveKey"]);
   return crypto.subtle.deriveKey(
-    { name:"PBKDF2", salt:unhex(CONFIG.salt), iterations:CONFIG.iterations, hash:"SHA-256" },
+    { name:"PBKDF2", salt:unhex(saltHex || CONFIG.salt),
+      iterations:CONFIG.iterations, hash:"SHA-256" },
     base, { name:"AES-GCM", length:256 }, false, ["decrypt", "encrypt"]);
 }
 
@@ -251,19 +252,66 @@ function makeVault(key){
       const when = iso => { try { return new Date(iso).toLocaleString(); } catch { return iso; } };
 
       let version = 0;
+      let writeToken = null;   // unsealed once per tab, by the write passphrase
 
-      const api = (method, body) => fetch(cfg.url + "/records", {
+      const api = (method, token, body) => fetch(cfg.url + "/records", {
         method,
         cache: "no-store",
         headers: Object.assign(
-          { authorization: "Bearer " + cfg.token },
+          { authorization: "Bearer " + token },
           body ? { "content-type": "application/json" } : {}),
         body: body ? JSON.stringify(body) : undefined
       });
 
+      /*
+       * The write token sits in the page sealed under a second passphrase, so
+       * unlocking the archive to read it is not enough to save. Asked for once
+       * per tab, then held in memory.
+       */
+      function askForWritePassphrase(){
+        return new Promise(resolve => {
+          out.textContent = "";
+          const field = document.createElement("input");
+          field.type = "password";
+          field.placeholder = "Write passphrase";
+          field.autocomplete = "off";
+          field.spellcheck = false;
+          field.style.cssText = "width:15em;margin-right:6px;background:#2A362F;"
+            + "border:1px solid #38463D;border-radius:3px;padding:5px 7px;"
+            + "font:inherit;color:#F4F1E6";
+          const ok = document.createElement("button");
+          ok.className = "btn";
+          ok.textContent = "Unlock saving";
+          const cancel = document.createElement("button");
+          cancel.className = "btn";
+          cancel.textContent = "Cancel";
+          out.append(field, ok, cancel);
+          field.focus();
+
+          const done = value => { out.textContent = ""; resolve(value); };
+          cancel.onclick = () => done(null);
+          ok.onclick = async () => {
+            if(!field.value) return;
+            ok.disabled = cancel.disabled = field.disabled = true;
+            try {
+              const key = await deriveKey(field.value, cfg.salt);
+              const token = new TextDecoder().decode(
+                await decrypt(key, unb64(cfg.writer).buffer));
+              done(token);
+            } catch (err) {
+              ok.disabled = cancel.disabled = field.disabled = false;
+              field.value = "";
+              field.focus();
+              field.placeholder = "Not that one — try again";
+            }
+          };
+          field.onkeydown = e => { if(e.key === "Enter"){ e.preventDefault(); ok.click(); } };
+        });
+      }
+
       try {
         say("Loading the latest…");
-        const res = await api("GET");
+        const res = await api("GET", cfg.readToken);
         if(res.status === 404){
           say("No saved edits yet — showing the published copy");
         } else if(!res.ok){
@@ -282,14 +330,22 @@ function makeVault(key){
 
       if(!btn) return;
       btn.onclick = async () => {
+        if(!writeToken){
+          const token = await askForWritePassphrase();
+          if(!token){ say("Not saved"); return; }
+          writeToken = token;
+        }
         btn.disabled = true;
         say("Saving…");
         try {
           const plain = new TextEncoder().encode(JSON.stringify(archive.items));
-          const res = await api("PUT", { version, blob: b64(await encrypt(key, plain)) });
+          const res = await api("PUT", writeToken, { version, blob: b64(await encrypt(key, plain)) });
           if(res.status === 409){
             const other = await res.json();
             say("Someone else saved at " + when(other.updated) + " — reload before saving", true);
+          } else if(res.status === 403){
+            writeToken = null;
+            say("That passphrase does not grant saving", true);
           } else if(!res.ok){
             throw new Error("HTTP " + res.status);
           } else {
