@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Coin &amp; Currency Archive</title>
+<style>
+:root{
+  --felt:#2A362F;
+  --felt-deep:#1E2823;
+  --felt-rail:#38463D;
+  --card:#F4F1E6;
+  --card-edge:#DED8C6;
+  --ink:#17140F;
+  --ink-soft:#5C564A;
+  --red:#A8322A;
+  --brass:#C08A2E;
+  --silver:#A8B0B2;
+  --f-data:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --f-body:Georgia,"Iowan Old Style","Times New Roman",serif;
+  --f-ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+body{
+  background:var(--felt);
+  background-image:radial-gradient(circle at 50% 0%,rgba(255,255,255,.05),transparent 60%);
+  color:var(--card);
+  font-family:var(--f-ui);
+  -webkit-font-smoothing:antialiased;
+  display:flex;align-items:center;justify-content:center;
+  padding:24px;
+}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+
+.gate{
+  width:100%;max-width:380px;
+  background:var(--felt-deep);
+  border:1px solid var(--felt-rail);
+  border-radius:4px;
+  box-shadow:0 18px 50px rgba(0,0,0,.45);
+  padding:30px 28px 24px;
+}
+.crest{
+  width:44px;height:44px;margin:0 auto 18px;
+  border-radius:50%;
+  background:radial-gradient(circle at 32% 28%,#E4B860,var(--brass) 55%,#7C5716);
+  box-shadow:inset 0 0 0 3px rgba(0,0,0,.28),0 2px 6px rgba(0,0,0,.4);
+}
+h1{
+  margin:0;text-align:center;
+  font-family:var(--f-data);font-size:13px;font-weight:700;
+  letter-spacing:.22em;text-transform:uppercase;
+}
+.sub{
+  margin:10px 0 24px;text-align:center;
+  font-family:var(--f-body);font-size:14px;line-height:1.5;
+  color:var(--silver);
+}
+label{
+  display:block;margin-bottom:6px;
+  font-family:var(--f-data);font-size:10px;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--silver);
+}
+input{
+  width:100%;
+  background:var(--felt);
+  border:1px solid var(--felt-rail);
+  border-radius:3px;
+  padding:11px 12px;
+  font-family:var(--f-data);font-size:14px;
+  color:var(--card);
+}
+input:disabled{opacity:.55}
+button{
+  width:100%;margin-top:14px;
+  background:var(--brass);border:0;border-radius:3px;
+  padding:11px 12px;
+  font-family:var(--f-data);font-size:12px;font-weight:700;
+  letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink);cursor:pointer;
+}
+button:hover:not(:disabled){background:#D29B3B}
+button:disabled{cursor:default;opacity:.55}
+
+.msg{
+  margin:16px 0 0;min-height:1.4em;
+  font-family:var(--f-data);font-size:11.5px;line-height:1.4;
+  letter-spacing:.04em;color:var(--silver);
+}
+.msg.err{color:#E0776C}
+.msg.busy::after{
+  content:"";display:inline-block;
+  width:6px;height:6px;margin-left:7px;border-radius:50%;
+  background:var(--brass);
+  animation:pulse .9s ease-in-out infinite;
+  vertical-align:middle;
+}
+@keyframes pulse{0%,100%{opacity:.25}50%{opacity:1}}
+@media (prefers-reduced-motion:reduce){.msg.busy::after{animation:none;opacity:.7}}
+
+.note{
+  margin:22px 0 0;padding-top:16px;
+  border-top:1px solid var(--felt-rail);
+  font-family:var(--f-body);font-size:12.5px;line-height:1.5;
+  color:var(--ink-soft);
+}
+</style>
+</head>
+<body>
+
+<main class="gate">
+  <div class="crest" aria-hidden="true"></div>
+  <h1>Coin &amp; Currency Archive</h1>
+  <p class="sub">The catalogue is encrypted. Enter the passphrase to unlock it.</p>
+
+  <form id="form">
+    <label for="pw">Passphrase</label>
+    <input id="pw" type="password" autocomplete="current-password"
+           spellcheck="false" autocapitalize="off" autofocus>
+    <button id="go" type="submit">Unlock</button>
+  </form>
+
+  <p id="msg" class="msg" role="status" aria-live="polite"></p>
+
+  <p class="note">Decryption happens in this browser. The passphrase is never
+     sent anywhere, and the server only ever holds the encrypted files.</p>
+</main>
+
+<script>
+/*
+ * Everything here lives inside this function on purpose. document.open() clears
+ * the document but not the global lexical scope, so any top-level const or let
+ * declared here would survive into the catalogue and collide with its own
+ * declarations — a SyntaxError that stops the catalogue's script dead. window
+ * properties are the only thing deliberately handed across; see window.VAULT.
+ */
+(function(){
+"use strict";
+
+const CONFIG = {
+  salt: "512037375777b18b056e914f8fbc63d8",
+  iterations: 600000,
+  app: "app.bin",
+  photoDir: "p/"
+};
+
+const MIME = {
+  jpg:"image/jpeg", jpeg:"image/jpeg", png:"image/png",
+  webp:"image/webp", gif:"image/gif", heic:"image/heic", tif:"image/tiff", tiff:"image/tiff"
+};
+
+const $ = s => document.querySelector(s);
+const form = $("#form"), pw = $("#pw"), go = $("#go"), msg = $("#msg");
+
+function say(text, kind){
+  msg.textContent = text;
+  msg.classList.toggle("err", kind === "err");
+  msg.classList.toggle("busy", kind === "busy");
+}
+
+/* Let the browser paint the status line before a blocking crypto step. */
+const painted = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+const unhex = h => Uint8Array.from(h.match(/../g) || [], b => parseInt(b, 16));
+
+async function deriveKey(passphrase){
+  const base = await crypto.subtle.importKey(
+    "raw", new TextEncoder().encode(passphrase), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey(
+    { name:"PBKDF2", salt:unhex(CONFIG.salt), iterations:CONFIG.iterations, hash:"SHA-256" },
+    base, { name:"AES-GCM", length:256 }, false, ["decrypt"]);
+}
+
+/* Every file is stored as a 12-byte nonce followed by AES-256-GCM ciphertext. */
+async function decrypt(key, buffer){
+  const bytes = new Uint8Array(buffer);
+  return crypto.subtle.decrypt(
+    { name:"AES-GCM", iv:bytes.subarray(0, 12) }, key, bytes.subarray(12));
+}
+
+/*
+ * Deliberately the default cache mode. Rebuilding under a new passphrase changes
+ * the salt in this page and every encrypted file with it; a forced cache hit
+ * would pair a fresh salt with a stale app.bin and report a perfectly good
+ * passphrase as wrong. Revalidating against the ETag keeps the two in step.
+ */
+async function grab(url){
+  const res = await fetch(url);
+  if(!res.ok) throw new Error(res.status + " " + res.statusText);
+  return res.arrayBuffer();
+}
+
+/*
+ * Handed to the catalogue on window.VAULT once the passphrase is known.
+ * The catalogue's drawer shows the embedded thumbnail immediately and calls
+ * plate() to swap in the full-resolution photograph as it decrypts.
+ */
+function makeVault(key){
+  const cache = new Map();
+  return {
+    photo(name){
+      let pending = cache.get(name);
+      if(!pending){
+        pending = (async () => {
+          const plain = await decrypt(key, await grab(CONFIG.photoDir + encodeURIComponent(name) + ".bin"));
+          const ext = name.split(".").pop().toLowerCase();
+          return URL.createObjectURL(new Blob([plain], { type: MIME[ext] || "application/octet-stream" }));
+        })();
+        cache.set(name, pending);
+        pending.catch(() => cache.delete(name));
+      }
+      return pending;
+    },
+    async plate(img){
+      const name = img && img.dataset.plate;
+      if(!name) return;
+      try {
+        const url = await this.photo(name);
+        if(img.isConnected) img.src = url;
+      } catch (err) {
+        /* No plate available — the embedded thumbnail stays on screen. */
+      }
+    }
+  };
+}
+
+function fail(text){
+  say(text, "err");
+  pw.disabled = go.disabled = false;
+  pw.select();
+  pw.focus();
+}
+
+form.addEventListener("submit", async e => {
+  e.preventDefault();
+  if(!pw.value || go.disabled) return;
+
+  pw.disabled = go.disabled = true;
+  say("Checking the passphrase…", "busy");
+  await painted();
+
+  let key;
+  try {
+    key = await deriveKey(pw.value);
+  } catch (err) {
+    return fail("Could not derive a key: " + err.message);
+  }
+
+  let payload;
+  try {
+    say("Fetching the catalogue…", "busy");
+    payload = await grab(CONFIG.app);
+  } catch (err) {
+    return fail("Could not fetch the catalogue (" + err.message + ").");
+  }
+
+  let plain;
+  try {
+    say("Decrypting…", "busy");
+    await painted();
+    plain = await decrypt(key, payload);
+  } catch (err) {
+    return fail("That passphrase does not open this archive.");
+  }
+
+  const html = new TextDecoder().decode(plain);
+  pw.value = "";
+  window.VAULT = makeVault(key);
+
+  /*
+   * Replace this page with the catalogue in the same top-level document, so its
+   * keyboard shortcuts, CSV download and unsaved-changes warning all behave
+   * exactly as they do when the file is opened straight off disk. document.open()
+   * clears the document but keeps the same window, so window.VAULT survives.
+   */
+  document.open();
+  document.write(html);
+  document.close();
+});
+
+if(!window.isSecureContext || !(window.crypto && crypto.subtle)){
+  pw.disabled = go.disabled = true;
+  say("This page must be served over HTTPS to decrypt the archive.", "err");
+}
+})();
+</script>
+
+</body>
+</html>
