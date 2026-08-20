@@ -326,7 +326,10 @@ function metals(set){
   return {
     ag:   real.reduce((s,i)=>s+n(i.asw_ozt)*n(i.qty),0),
     au:   real.reduce((s,i)=>s+n(i.agw_ozt)*n(i.qty),0),
-    bulk: real.reduce((s,i)=>s+(i.asw_ozt?0:n(i.weight_g)),0),
+    /* weight_g is the mass of one coin, so a row standing for several must count
+       them all — the same way asw and agw already do. A blank or zero qty means
+       the count was never established, not that the row holds nothing. */
+    bulk: real.reduce((s,i)=>s+(i.asw_ozt?0:n(i.weight_g)*(n(i.qty)||1)),0),
     count: real.length
   };
 }

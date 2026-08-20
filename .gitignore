@@ -26,6 +26,13 @@ coin-archive/coin-archive/mark_duplicates.py
 /catalog.html
 /inventory.csv
 
+# Anything set aside during a rebuild, and the old->new id map from splitting
+# group photographs. Local bookkeeping; the .old suffix in particular would
+# otherwise slip past the rules above and publish the plaintext archive.
+*.old
+coin-archive/coin-archive/id-map.csv
+coin-archive/coin-archive/rebuilt/
+
 # Windows "downloaded from the internet" metadata
 *:Zone.Identifier
 *.Identifier
