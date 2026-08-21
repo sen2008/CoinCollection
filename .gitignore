@@ -33,6 +33,11 @@ coin-archive/coin-archive/mark_duplicates.py
 coin-archive/coin-archive/id-map.csv
 coin-archive/coin-archive/rebuilt/
 
+# Review sheets fed to apply_edits.py. They name coins — denomination, variety,
+# year — so they belong with the collection, not in a public repository.
+coin-archive/coin-archive/edits.csv
+coin-archive/coin-archive/edits-*.csv
+
 # Windows "downloaded from the internet" metadata
 *:Zone.Identifier
 *.Identifier
