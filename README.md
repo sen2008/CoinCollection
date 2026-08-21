@@ -24,7 +24,9 @@ coin-archive/coin-archive/
 ├── template.html        markup for the catalogue (edit here, not in catalog.html)
 ├── build_inventory.py   one-time: assigns IDs and renames photos
 ├── build_catalog.py     regenerates catalog.html from inventory.csv
-└── contact_sheets.py    regenerates the contact sheets
+├── contact_sheets.py    regenerates the contact sheets
+├── split_records.py     one-time: cut multi-coin photographs into one record each
+└── _detect/             coin-finding used by split_records.py
 ```
 
 Alongside those, on your machine only, sit `inventory.csv`, `catalog.html`,
@@ -38,13 +40,32 @@ photographs were taken — which follows the order things were physically sorted
 so neighbouring IDs are usually related.
 
 1. **IDs are permanent.** Never renumber, never reuse. If an item leaves the
-   collection, set its status and leave the row in place.
+   collection, set its status and leave the row in place. The catalogue was
+   renumbered once, when multi-coin photographs were split into one record each,
+   and that was only safe because no coin carried a written ID yet. Once a flip
+   is labelled, that door is closed — `split_records.py` must not be re-run.
 2. **The ID is not a location.** Bag number, storage type and category are
    ordinary columns, free to be corrected as you learn more. The ID never moves.
 3. **New items continue the sequence.** Don't backfill gaps.
 
 Write the ID on the flip or on a slip in the bag. That's the whole point — it's
 what connects the physical object to the record and the photograph.
+
+## One coin, one record
+
+Some photographs held several coins and were catalogued as a single row with a
+`qty`. `split_records.py` cut those into one image per coin and rewrote the
+inventory so every row is a single object, taking 218 records to 390.
+
+Coins are found by circle detection and then checked: the right count, radii that
+agree with each other, and a colour that could be metal. Photographs failing any
+of those are left whole rather than cut wrongly. Eight remain, and they are not
+fixable by better code — five are sealed bags whose coins the camera never saw
+individually, one a bagged pile and one a tube on the scale. The last, C-204,
+shows six cents where only five can be resolved.
+
+`id-map.csv` records what became what, keyed to the camera filenames, and stays
+out of the repository along with everything else describing the collection.
 
 ## The CSV
 
@@ -64,6 +85,7 @@ Columns worth explaining:
 | `authenticate` | `Y` when it must be checked in person before any sale. |
 | `bag_basis` | How the bag assignment was made. `owner` = confirmed from memory. `label` = the bag's own contents list matches one for one. `sequence` = the items sit between two bag photographs and are the right material. `unplaced` = no bag photograph brackets them. |
 | `duplicate_of` | Set when a photograph is a second view of an object already catalogued. Those rows keep their record but are excluded from counts and weights. |
+| `qty` | Coins in this record — 1 for everything except the eight group photographs that could not be split. `asw_ozt`, `agw_ozt` and `weight_g` are all **per coin**, and the catalogue multiplies each by `qty`. |
 
 The last two columns, `photo` and `orig_photo`, keep the link back to the
 original camera filenames so nothing is orphaned if the photos are re-imported.
