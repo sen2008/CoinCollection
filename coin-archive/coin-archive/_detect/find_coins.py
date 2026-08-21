@@ -9,6 +9,57 @@ def load(path):
     im = ImageOps.exif_transpose(Image.open(path)).convert("RGB")
     return np.array(im)
 
+def looks_metallic(rgb, circle):
+    """
+    Reject circles that are not made of metal.
+
+    The kitchen scale's readout is a bright cyan rectangle, and a circle landing
+    on the digits passes every geometric test. Coins are grey, copper or silver:
+    never strongly blue, and never that bright. This checks the average colour
+    inside the circle rather than its shape.
+    """
+    x, y, r = circle
+    h, w = rgb.shape[:2]
+    y0, y1 = max(0, y - r), min(h, y + r)
+    x0, x1 = max(0, x - r), min(w, x + r)
+    patch = rgb[y0:y1, x0:x1]
+    if patch.size == 0:
+        return False
+    red, green, blue = (float(patch[:, :, i].mean()) for i in range(3))
+    if blue > red * 1.18:          # cyan / blue glow, not metal
+        return False
+    if blue > 150 and green > 150 and red < green * 0.9:
+        return False               # bright backlit display
+    return True
+
+
+def pick_consistent(candidates, n):
+    """
+    Choose the n circles that look like a set of coins.
+
+    Several of these photographs were taken on a kitchen scale, whose platter rim
+    is a large, clean circle the detector loves. Coins in one frame are all about
+    the same size, so the right answer is the n circles with the tightest spread
+    of radii that do not sit on top of each other.
+    """
+    import itertools
+    if len(candidates) < n:
+        return []
+    best, best_spread = [], None
+    pool = sorted(candidates, key=lambda c: c[2])
+    for combo in itertools.combinations(pool, n):
+        radii = [c[2] for c in combo]
+        spread = max(radii) / min(radii)
+        if best_spread is not None and spread >= best_spread:
+            continue
+        clash = any(((a[0]-b[0])**2 + (a[1]-b[1])**2) ** .5 < (a[2]+b[2]) * 0.6
+                    for a, b in itertools.combinations(combo, 2))
+        if clash:
+            continue
+        best, best_spread = list(combo), spread
+    return best
+
+
 def detect(rgb, expected=None):
     h, w = rgb.shape[:2]
     scale = 700 / max(h, w)
@@ -27,12 +78,17 @@ def detect(rgb, expected=None):
                                    minRadius=rmin, maxRadius=rmax)
         if circles is None:
             continue
-        found = np.round(circles[0]).astype(int)
-        if expected and len(found) >= expected:
-            best = found[:expected]
-            break
-        if len(found) > len(best):
-            best = found
+        # Colour is judged on `small`, because these coordinates are in its space.
+        # Testing them against the full-size image samples the wrong patch.
+        metallic = [tuple(map(int, c)) for c in np.round(circles[0]).astype(int)
+                    if looks_metallic(small, tuple(map(int, c)))]
+        if expected and len(metallic) >= expected:
+            chosen = pick_consistent(metallic, expected)
+            if chosen:
+                best = chosen
+                break
+        if len(metallic) > len(best):
+            best = metallic
     return [(int(x / scale), int(y / scale), int(r / scale)) for x, y, r in best]
 
 def reading_order(circles):
