@@ -138,6 +138,21 @@ def main():
             row["notes"] = after
             rewritten += 1
 
+    # duplicate_of holds an id too, and it is easy to miss because it does not
+    # look like prose. Left alone it keeps an old number that now belongs to an
+    # unrelated coin, so the row would claim to duplicate something it has never
+    # seen. Where the referenced photograph was split, the duplicate is of the
+    # photograph, so it points at the first coin taken from it.
+    redirected = 0
+    for row, _, _ in out_rows:
+        ref = row["duplicate_of"].strip()
+        if ref and ref in first_new and first_new[ref] != ref:
+            row["duplicate_of"] = first_new[ref]
+            redirected += 1
+        elif ref and ref not in first_new:
+            unresolved.add(ref)
+    print(f"  duplicate_of fixed: {redirected} rows")
+
     print(f"  notes renumbered  : {rewritten} rows")
     if unresolved:
         print(f"  WARNING unresolved references: {sorted(unresolved)}")

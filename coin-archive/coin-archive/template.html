@@ -212,8 +212,10 @@ main{padding:22px 20px 80px;max-width:1500px;margin:0 auto}
     <input id="q" class="search" type="search" placeholder="Search year, denomination, note, serial, ID…" autocomplete="off">
     <select id="fCat" class="filter"><option value="">All categories</option></select>
     <select id="fBag" class="filter"><option value="">All bags</option></select>
+    <select id="fVar" class="filter"><option value="">All varieties</option></select>
     <select id="sort" class="filter"></select>
     <button class="chip" id="cNeed" aria-pressed="false">Needs ID</button>
+    <button class="chip" id="cNoYear" aria-pressed="false">No year</button>
     <button class="chip" id="cKey" aria-pressed="false">Key date</button>
     <button class="chip" id="cAuth" aria-pressed="false">Authenticate</button>
     <button class="btn" id="bImport">Load CSV</button>
@@ -271,7 +273,7 @@ const LABELS = {
 let items = DATA.slice();
 let view = [];
 let cur = -1;
-const F = {need:false, key:false, auth:false};
+const F = {need:false, key:false, auth:false, noyear:false};
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -315,7 +317,10 @@ const SORTS = {
   year: {
     label: "Year, oldest first",
     cmp: (a,b) => (yearNum(a)||9999)-(yearNum(b)||9999) || a.id.localeCompare(b.id),
-    group: null
+    group: it => {
+      const y = yearNum(it);
+      return y ? `${Math.floor(y/10)*10}s` : "Undated";
+    }
   }
 };
 
@@ -346,8 +351,12 @@ function matches(it){
   if(F.need && it.status!=="needs-id") return false;
   if(F.key && it.key_date!=="Y") return false;
   if(F.auth && it.authenticate!=="Y") return false;
+  if(F.noyear && String(it.year||"").trim()) return false;
   const c = $("#fCat").value;
   if(c && it.category!==c) return false;
+  const v = $("#fVar").value;
+  if(v === "__none") { if(it.variety) return false; }
+  else if(v && it.variety !== v) return false;
   const b = $("#fBag").value;
   if(b === "__none") { if(it.bag) return false; }
   else if(b && it.bag !== b) return false;
@@ -509,7 +518,7 @@ $("#bImport").onclick = () => $("#file").click();
 $("#file").onchange = e => {
   const f = e.target.files[0]; if(!f) return;
   const r = new FileReader();
-  r.onload = () => { items = parseCSV(r.result); fillBags(); render(); };
+  r.onload = () => { items = parseCSV(r.result); fillBags(); fillVarieties(); render(); };
   r.readAsText(f);
   e.target.value = "";
 };
@@ -519,6 +528,14 @@ $("#fCat").innerHTML = '<option value="">All categories</option>'
   + CATS.map(c=>`<option>${c}</option>`).join("");
 $("#sort").innerHTML = Object.entries(SORTS)
   .map(([k,v])=>`<option value="${k}">Sort: ${v.label}</option>`).join("");
+function fillVarieties(){
+  const vars = [...new Set(items.map(i=>i.variety).filter(Boolean))].sort();
+  const keep = $("#fVar").value;
+  $("#fVar").innerHTML = '<option value="">All varieties</option>'
+    + vars.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join("")
+    + '<option value="__none">No variety recorded</option>';
+  $("#fVar").value = keep;
+}
 function fillBags(){
   const bags = [...new Set(items.map(i=>i.bag).filter(Boolean))]
     .sort((a,b)=>(parseInt(a,10)||1e9)-(parseInt(b,10)||1e9));
@@ -529,11 +546,13 @@ function fillBags(){
   $("#fBag").value = keep;
 }
 fillBags();
+fillVarieties();
 $("#q").oninput = render;
 $("#fCat").onchange = render;
 $("#fBag").onchange = render;
+$("#fVar").onchange = render;
 $("#sort").onchange = render;
-[["cNeed","need"],["cKey","key"],["cAuth","auth"]].forEach(([id,k])=>{
+[["cNeed","need"],["cKey","key"],["cAuth","auth"],["cNoYear","noyear"]].forEach(([id,k])=>{
   $("#"+id).onclick = e => {
     F[k] = !F[k];
     e.currentTarget.setAttribute("aria-pressed",F[k]);
