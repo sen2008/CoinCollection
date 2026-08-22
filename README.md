@@ -80,14 +80,13 @@ Columns worth explaining:
 | column | meaning |
 |---|---|
 | `status` | `needs-id` → `identified` → `verified`. Verified means checked in hand, not from a photo. |
-| `asw_ozt` / `agw_ozt` | Actual silver / gold weight in troy ounces. Multiply by spot for melt. |
+| `asw_ozt` / `agw_ozt` | Actual silver / gold weight in troy ounces, **for one coin** — the catalogue multiplies by `qty`. Multiply by spot for melt. Putting a whole group's weight here double-counts it, a mistake that overstated the silver total by 30 ozt until it was found. `fill_silver.py` derives the value where mass and fineness are fixed by the mint, and refuses to guess for hand-poured bars, rounds of unstated size, or bags weighed whole. |
 | `grade_noted` / `price_noted` | What's written on the holder in his hand. Not a current appraisal. |
 | `acquired` | The date in red ink. |
 | `key_date` | `Y` for recognised scarce dates. |
 | `authenticate` | `Y` when it must be checked in person before any sale. |
 | `bag_basis` | How the bag assignment was made. `owner` = confirmed from memory. `label` = the bag's own contents list matches one for one. `sequence` = the items sit between two bag photographs and are the right material. `unplaced` = no bag photograph brackets them. |
 | `duplicate_of` | Set when a photograph is a second view of an object already catalogued. Those rows keep their record but are excluded from counts and weights. |
-| `asw_ozt` | Silver in **one** coin, which the catalogue multiplies by `qty`. Putting a whole group's weight here double-counts it — that mistake overstated the total by 30 ozt until it was found. `fill_silver.py` derives the value where mass and fineness are fixed by the mint, and refuses to guess for hand-poured bars, rounds of unstated size, or bags weighed whole. |
 | `qty` | Coins in this record — 1 for everything except the eight group photographs that could not be split. `asw_ozt`, `agw_ozt` and `weight_g` are all **per coin**, and the catalogue multiplies each by `qty`. |
 
 The last two columns, `photo` and `orig_photo`, keep the link back to the
