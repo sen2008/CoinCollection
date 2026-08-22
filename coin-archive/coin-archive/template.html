@@ -172,7 +172,28 @@ main{padding:22px 20px 80px;max-width:1500px;margin:0 auto}
 .ibtn{background:#DED8C6;border:1px solid #CCC5B0;border-radius:3px;
   padding:5px 10px;font-family:var(--f-data);font-size:12px;cursor:pointer;color:var(--ink)}
 .ibtn:hover{background:#D3CCB8}
-.dbody{overflow-y:auto;padding:18px;flex:1}
+.dbody{overflow-y:auto;padding:18px;flex:1;
+  /* Let the browser own vertical scrolling; horizontal drags reach the swipe
+     handler instead of triggering the back gesture or a rubber-band. */
+  touch-action:pan-y}
+.swipehint{
+  display:none;margin-left:auto;
+  font-family:var(--f-data);font-size:10px;letter-spacing:.1em;
+  color:var(--ink-soft);text-transform:uppercase;
+}
+/* Only worth saying on a device that can swipe, where the arrows are fiddly. */
+@media (hover:none) and (pointer:coarse){
+  .swipehint{display:inline}
+  .dhead .nav{margin-left:12px}
+}
+/* A brief nudge in the direction of travel, so a swipe feels like it landed. */
+.drawer.slid-left .dbody{animation:slideFromRight .18s ease}
+.drawer.slid-right .dbody{animation:slideFromLeft .18s ease}
+@keyframes slideFromRight{from{transform:translateX(14px);opacity:.55}to{transform:none;opacity:1}}
+@keyframes slideFromLeft{from{transform:translateX(-14px);opacity:.55}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){
+  .drawer.slid-left .dbody,.drawer.slid-right .dbody{animation:none}
+}
 .plate{width:100%;border-radius:2px;background:#E7E2D2;display:block;margin-bottom:18px;
   box-shadow:inset 0 1px 5px rgba(0,0,0,.2)}
 .fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -230,6 +251,7 @@ main{padding:22px 20px 80px;max-width:1500px;margin:0 auto}
 <aside class="drawer" id="drawer" aria-label="Record">
   <div class="dhead">
     <span class="id" id="dId">—</span>
+    <span class="swipehint">swipe to move</span>
     <span class="nav">
       <button class="ibtn" id="bPrev" title="Previous (K or ←)">&larr;</button>
       <button class="ibtn" id="bNext" title="Next (J or →)">&rarr;</button>
@@ -561,6 +583,46 @@ $("#sort").onchange = render;
 });
 $("#bClose").onclick = close;
 $("#scrim").onclick = close;
+/* ---------- swiping between records ----------
+ * The arrows are small on a phone. A horizontal drag anywhere in the drawer
+ * moves to the next or previous record; a mostly-vertical drag is left alone so
+ * the body still scrolls, and a drag that starts inside a field is ignored so
+ * selecting text does not jump the record.
+ */
+(function(){
+  const drawer = $("#drawer");
+  const MIN_X = 55;      // shorter than this is a tap or a wobble
+  const MAX_SLOPE = 0.8; // vertical travel allowed, as a fraction of horizontal
+  const MAX_MS = 700;
+  let x0 = 0, y0 = 0, t0 = 0, tracking = false;
+
+  drawer.addEventListener("touchstart", e => {
+    if(e.touches.length !== 1){ tracking = false; return; }
+    if(e.target.closest("input,textarea,select,button")){ tracking = false; return; }
+    const t = e.touches[0];
+    x0 = t.clientX; y0 = t.clientY; t0 = Date.now(); tracking = true;
+  }, {passive:true});
+
+  drawer.addEventListener("touchend", e => {
+    if(!tracking) return;
+    tracking = false;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - x0, dy = t.clientY - y0;
+    if(Date.now() - t0 > MAX_MS) return;
+    if(Math.abs(dx) < MIN_X) return;
+    if(Math.abs(dy) > Math.abs(dx) * MAX_SLOPE) return;
+    swipe(dx < 0 ? 1 : -1);
+  }, {passive:true});
+
+  function swipe(d){
+    step(d);
+    const cls = d > 0 ? "slid-left" : "slid-right";
+    drawer.classList.remove("slid-left","slid-right");
+    void drawer.offsetWidth;      // restart the animation on a repeat swipe
+    drawer.classList.add(cls);
+  }
+})();
+
 $("#bPrev").onclick = () => step(-1);
 $("#bNext").onclick = () => step(1);
 document.addEventListener("keydown", e=>{
