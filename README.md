@@ -26,7 +26,9 @@ coin-archive/coin-archive/
 ├── build_catalog.py     regenerates catalog.html from inventory.csv
 ├── contact_sheets.py    regenerates the contact sheets
 ├── split_records.py     one-time: cut multi-coin photographs into one record each
-└── _detect/             coin-finding used by split_records.py
+├── apply_edits.py       apply a reviewed sheet of per-record corrections
+├── fill_silver.py       derive asw_ozt from standard mass and fineness
+└── _detect/             coin-finding and contact sheets, used by the two above
 ```
 
 Alongside those, on your machine only, sit `inventory.csv`, `catalog.html`,
@@ -85,6 +87,7 @@ Columns worth explaining:
 | `authenticate` | `Y` when it must be checked in person before any sale. |
 | `bag_basis` | How the bag assignment was made. `owner` = confirmed from memory. `label` = the bag's own contents list matches one for one. `sequence` = the items sit between two bag photographs and are the right material. `unplaced` = no bag photograph brackets them. |
 | `duplicate_of` | Set when a photograph is a second view of an object already catalogued. Those rows keep their record but are excluded from counts and weights. |
+| `asw_ozt` | Silver in **one** coin, which the catalogue multiplies by `qty`. Putting a whole group's weight here double-counts it — that mistake overstated the total by 30 ozt until it was found. `fill_silver.py` derives the value where mass and fineness are fixed by the mint, and refuses to guess for hand-poured bars, rounds of unstated size, or bags weighed whole. |
 | `qty` | Coins in this record — 1 for everything except the eight group photographs that could not be split. `asw_ozt`, `agw_ozt` and `weight_g` are all **per coin**, and the catalogue multiplies each by `qty`. |
 
 The last two columns, `photo` and `orig_photo`, keep the link back to the
