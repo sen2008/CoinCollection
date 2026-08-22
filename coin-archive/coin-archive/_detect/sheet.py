@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """Contact sheet of specific records, labelled, big enough to read a date."""
+import csv
 import sys
 from PIL import Image, ImageDraw, ImageFont
 
+# Not every photograph is a .jpg — the filename lives in the inventory.
+PHOTO = {r["id"]: r["photo"] for r in csv.DictReader(open("inventory.csv"))}
+
 ids = sys.argv[1:-1]
 out = sys.argv[-1]
-CELL, COLS = 400, 4
+CELL, COLS = 360, 5
 try:
     font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 28)
 except OSError:
@@ -14,7 +18,7 @@ except OSError:
 rows = (len(ids) + COLS - 1) // COLS
 sheet = Image.new("RGB", (COLS * CELL, rows * (CELL + 34)), "#101010")
 for n, cid in enumerate(ids):
-    im = Image.open(f"photos/{cid}.jpg")
+    im = Image.open("photos/" + PHOTO[cid])
     im.thumbnail((CELL - 8, CELL - 8))
     x, y = (n % COLS) * CELL, (n // COLS) * (CELL + 34)
     sheet.paste(im, (x + (CELL - im.width) // 2, y + 34 + (CELL - 8 - im.height) // 2))
