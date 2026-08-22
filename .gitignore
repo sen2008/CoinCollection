@@ -35,8 +35,11 @@ coin-archive/coin-archive/rebuilt/
 
 # Review sheets fed to apply_edits.py. They name coins — denomination, variety,
 # year — so they belong with the collection, not in a public repository.
-coin-archive/coin-archive/edits.csv
-coin-archive/coin-archive/edits-*.csv
+# Unanchored, so a sheet written to the wrong directory is still caught: one of
+# these was appended at the repository root by a mistyped path, where the
+# coin-archive/ rules did not reach it.
+edits.csv
+edits-*.csv
 
 # Windows "downloaded from the internet" metadata
 *:Zone.Identifier
