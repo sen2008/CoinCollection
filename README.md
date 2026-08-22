@@ -27,6 +27,7 @@ coin-archive/coin-archive/
 ├── contact_sheets.py    regenerates the contact sheets
 ├── split_records.py     one-time: cut multi-coin photographs into one record each
 ├── apply_edits.py       apply a reviewed sheet of per-record corrections
+├── relabel_split.py     replace a split record's inherited group note
 ├── fill_silver.py       derive asw_ozt from standard mass and fineness
 └── _detect/             coin-finding and contact sheets, used by the two above
 ```
@@ -69,6 +70,19 @@ shows six cents where only five can be resolved.
 `id-map.csv` records what became what, keyed to the camera filenames, and stays
 out of the repository along with everything else describing the collection.
 
+Splitting left each new record carrying the note written for the whole group —
+"Four Indian Head cents: 1895, 1893, 1903, 1893" sitting on four separate coins
+and describing none of them. `relabel_split.py` replaces that opening sentence
+per coin while keeping the provenance that follows it, which is still true of
+the single coin: which bag, how the boundary was decided, which camera file it
+came from.
+
+Reading the coins one at a time also caught what the group notes had guessed at.
+Several were the wrong denomination — a Barber quarter catalogued as a dollar, a
+clad Kennedy half catalogued as a Peace dollar — and three records turned out to
+be one two-ounce round the detector had cut into three. Where a photograph shows
+a coin the totals had wrong, the coin wins.
+
 ## The CSV
 
 `inventory.csv` is plain UTF-8, comma-separated, 25 columns. It's the thing to
@@ -76,6 +90,11 @@ back up and the thing every other file here is generated from. It will open in
 Excel, Numbers, LibreOffice, pandas, sqlite, or a text editor in forty years.
 
 Columns worth explaining:
+
+Correcting a sheet: `apply_edits.py` takes `edits.csv` with an `id` and any
+columns to set, leaving blank cells alone so a row can fix one field without
+disturbing the rest. A lone `-` empties a field instead, for when a record turns
+out to hold less than was thought and a stale silver weight has to go.
 
 | column | meaning |
 |---|---|
@@ -102,7 +121,8 @@ Open `catalog.html` in any browser. No server, no install, no internet.
 - **All bags** narrows to one bag, or to everything not in a bag.
 - **Needs ID / Key date / Authenticate** filter to the work that's left.
 - **Click any flip** to open its record and edit it.
-- **← →** or **J / K** move between records, **Esc** closes.
+- **← →** or **J / K** move between records, **Esc** closes. On a phone,
+  swipe the record left or right instead — the arrows are a small target.
 - **Save CSV** downloads the updated `inventory.csv`. **Load CSV** reads one back in.
 
 Edits live in the browser tab until you press **Save CSV**. Nothing writes to
@@ -168,7 +188,7 @@ republishes the site under a new one.
 3. Run `./publish.sh`.
 
 The site updates a minute or two later. Editing a record rewrites only
-`docs/app.bin`; the 218 encrypted plates are untouched unless a photograph
+`docs/app.bin`; the 390 encrypted plates are untouched unless a photograph
 changes, because each file's nonce is derived from its own content.
 
 ### First-time setup on a new machine
